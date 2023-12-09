@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  font-family: 'futura-pt', sans-serif;
+}
+
 .bg-horizontal {
   background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.jpg');
   background-size: cover;
