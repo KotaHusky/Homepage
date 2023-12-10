@@ -13,7 +13,7 @@ export default async function Index() {
         </div>
         <h1 className="text-3xl font-bold mb-4">Kota Husky</h1>
         <div className="mb-2">
-          <p className="text-lg mb-2">Digital & custom cloud enablement for events</p>
+          <p className="text-lg mb-2">Digital & cloud enablement for events</p>
           <p className="text-lg mb-2">Event and portrait photographer</p>
           <p className="text-lg mb-2">Founder of Barks & Rec</p>
         </div>
