@@ -28,12 +28,12 @@ export default async function Index() {
           <HomepageButton className="w-full mb-4" buttonText={"Furtrack"} />
           <HomepageButton className="w-full mb-4" buttonText={"Barks & Rec"} />
         </div>
-        <div className="mb-8">
-          <SocialIcon icon={"fa-github"} text={"test"} />
+        <div className="mb-8 text-3xl">
+          <SocialIcon icon={"fa-brands fa-github"} />
           <SocialIcon icon={"fa-cloud"} />
           <SocialIcon icon={"fa-envelope"} />
-          <SocialIcon icon={"fa-paperplane"} />
-          <SocialIcon icon={"fa-python"} />
+          <SocialIcon icon={"fa-brands fa-telegram"} />
+          <SocialIcon icon={"fa-brands fa-python"} />
         </div>
       </div>
     </div>
