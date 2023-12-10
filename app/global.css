@@ -4,17 +4,20 @@
 
 body {
   font-family: 'futura-pt', sans-serif;
-  color: white
+  color: white;
 }
 
-.bg-horizontal {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.jpg');
-  background-size: cover;
-  background-position: center;
-}
+/**
+ * Utility classes for background images with horizontal and vertical gradients.
+*/
+@layer utilities {
+  .bg-horizontal {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.jpg');
+    background-size: 100% auto;
+  }
 
-.bg-vertical {
-  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.jpg');
-  background-size: cover;
-  background-position: center;
+  .bg-vertical {
+    background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.jpg');
+    background-size: 100% auto;
+  }
 }
