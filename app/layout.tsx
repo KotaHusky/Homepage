@@ -13,7 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <link rel="stylesheet" href="https://use.typekit.net/vxp7yul.css" />      <Script id="fontawesome" src="https://kit.fontawesome.com/cea9781086.js" crossorigin="anonymous" strategy="afterInteractive" />
+      <link rel="stylesheet" href="https://use.typekit.net/vxp7yul.css" />
+      <Script id="fontawesome" src="https://kit.fontawesome.com/cea9781086.js" crossOrigin="anonymous" strategy="afterInteractive" />
       <Script id="gtag-manager" src="https://www.googletagmanager.com/gtag/js?id=G-S7KWG10TS2" strategy="afterInteractive" />
       <Script id="gtag-config" strategy="afterInteractive">
         {`
