@@ -1,6 +1,5 @@
 import { HomepageButton, SocialIcon } from "@homepage/ui";
 import {MapPinIcon} from '@heroicons/react/20/solid'
-import Image from "next/image";
 
 export default async function Index() {
   /*
