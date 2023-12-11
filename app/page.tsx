@@ -6,7 +6,7 @@ export default async function Index() {
    * Note: The corresponding styles are in the ./index.css file.
    */
   return (
-    <div className="bg-vertical md:bg-horizontal">
+    <div className="bg-vertical md:bg-horizontal h-screen">
       <div className="flex flex-col items-center mx-24 text-center">
         <div className="my-8">
           <img src="/images/kota.png" alt="Profile Picture" className="w-32 h-32 md:w-64 md:h-64 rounded-full" />
