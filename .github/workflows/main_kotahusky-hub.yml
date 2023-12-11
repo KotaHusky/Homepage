@@ -24,9 +24,9 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: npm install and build
+      - name: npm clean-install and build
         run: |
-          npm install
+          npm ci
           npm run build --prod
         working-directory: .
 
