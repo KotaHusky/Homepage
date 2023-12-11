@@ -2,7 +2,7 @@ import styles from './social-icon.module.css';
 
 export interface SocialIconProps {
   icon: string;
-  text: string;
+  text?: string;
   href: string;
 }
 
