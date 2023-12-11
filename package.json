@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "serve": "nx serve",
+    "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
     "build": "next build && next export",
     "test": "nx test",
     "start": "next start"
