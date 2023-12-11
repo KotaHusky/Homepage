@@ -1,0 +1,42 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build, test, and deploy Node.js app to Azure Web App - KotaHusky-Hub
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+jobs:
+  build-test-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@master
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: npm install and build
+        run: |
+          npm install
+          npm run build --prod
+        working-directory: .
+
+      - name: Run Nx tests
+        run: npm run nx test
+
+      - name: 'Deploy to Azure Web App'
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'KotaHusky-Hub'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E06EE537669F47DAB3BE64A1168B7663 }}
+          package: ./dist/hub
