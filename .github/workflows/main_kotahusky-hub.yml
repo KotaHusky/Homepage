@@ -27,9 +27,9 @@ jobs:
       - name: npm clean-install and build
         run: |
           npm ci
-          npm run build --prod
+          npx nx build homepage --prod
           cp ./app/server.js ./dist/homepage/server.js
-          ls ./dist/homepage
+          ls -a ./dist/homepage
         working-directory: .
 
       - name: Run Nx tests
