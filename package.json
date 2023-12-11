@@ -3,9 +3,10 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "start": "nx serve",
+    "serve": "nx serve",
     "build": "nx build",
-    "test": "nx test"
+    "test": "nx test",
+    "start": "next start"
   },
   "private": true,
   "dependencies": {
