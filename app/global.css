@@ -13,13 +13,15 @@ body {
 @layer utilities {
   .bg-horizontal {
     background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.jpg');
-    background-size: 100% auto;
+    background-size: cover;
     background-repeat: repeat-y;
+    background-attachment: fixed;
   }
 
   .bg-vertical {
     background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.jpg');
-    background-size: 100% auto;
+    background-size: cover;
     background-repeat: repeat-y;
+    background-attachment: fixed;
   }
 }
