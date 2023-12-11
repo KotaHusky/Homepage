@@ -31,7 +31,7 @@ jobs:
         working-directory: .
 
       - name: Run Nx tests
-        run: npm run nx test
+        run: npx nx test
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
