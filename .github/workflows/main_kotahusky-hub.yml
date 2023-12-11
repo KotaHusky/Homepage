@@ -29,6 +29,7 @@ jobs:
           npm ci
           npm run build --prod
           cp ./app/server.js ./dist/homepage/server.js
+          ls ./dist/homepage
         working-directory: .
 
       - name: Run Nx tests
