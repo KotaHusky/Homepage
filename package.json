@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
+    "serve": "npx next",
     "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
     "build": "next build && next export",
     "test": "nx test",
@@ -12,7 +13,7 @@
   "dependencies": {
     "@heroicons/react": "^2.0.18",
     "@nx/next": "17.2.0",
-    "next": "13.4.4",
+    "next": "^14.0.4",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "tslib": "^2.3.0"
