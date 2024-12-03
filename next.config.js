@@ -13,6 +13,16 @@ const nextConfig = {
     svgr: false,
   },
   output: 'export',
+
+  async redirects() {
+    return [
+      {
+        source: '/ad',
+        destination: 'https://afterdark.kota.dog',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 const plugins = [
