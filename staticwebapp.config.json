@@ -1,0 +1,12 @@
+{
+  "routes": [
+    {
+      "route": "/ad",
+      "methods": [
+        "get"
+      ],
+      "redirect": "afterdark.kota.dog",
+      "statusCode": 301
+    }
+  ]
+}
