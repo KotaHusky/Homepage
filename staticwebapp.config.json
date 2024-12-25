@@ -5,7 +5,7 @@
       "methods": [
         "get"
       ],
-      "redirect": "Https://afterdark.kota.dog",
+      "redirect": "https://afterdark.kota.dog",
       "statusCode": 301
     }
   ]
