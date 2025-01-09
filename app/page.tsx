@@ -40,7 +40,7 @@ export default async function Index() {
         <div className="flex mb-8 space-x-4 text-2xl">
           <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} />
           <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} />
-          <SocialIcon icon={"fa-cloud-sun"} href={"https://bsky.app/profile/kota.dog"} />
+          <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} />
           <SocialIcon icon={"fa-brands fa-telegram"} href={"https://t.me/KotaHusky"} />
           {/* <SocialIcon icon={"fa-envelope"} /> TODO: REIMPLEMENT AS FORM */}
         </div>
