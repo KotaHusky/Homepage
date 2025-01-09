@@ -5,9 +5,9 @@
   "scripts": {
     "serve": "npx next",
     "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
-    "build": "next build && next export",
+    "build": "next build",
     "test": "nx test",
-    "start": "next start"
+    "start": "npx serve@latest out -l 3000"
   },
   "private": true,
   "dependencies": {
