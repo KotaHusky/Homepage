@@ -1,5 +1,5 @@
 # Use the official Node.js image as the base image
-FROM node:20-alpine AS builder
+FROM node:20 AS builder
 
 # Set the working directory
 WORKDIR /app
@@ -9,6 +9,9 @@ COPY package*.json ./
 
 # Install dependencies
 RUN npm ci
+
+# List installed dependencies
+RUN npm list
 
 # Copy the rest of the application code
 COPY . .
@@ -30,3 +33,5 @@ EXPOSE 3000
 
 # Start the application
 CMD ["npx", "serve@latest", "out", "-l", "3000"]
+
+RUN ls -l /usr/local/bin/docker-entrypoint.sh

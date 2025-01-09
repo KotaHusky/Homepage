@@ -8,7 +8,7 @@ metadata:
   annotations:
     kubernetes.io/change-cause: "Force update to refresh deployment"
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: homepage
@@ -25,3 +25,10 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1"
