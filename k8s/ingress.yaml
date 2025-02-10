@@ -3,22 +3,10 @@ kind: Ingress
 metadata:
   name: homepage-ingress
   namespace: webapps
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    kubernetes.io/ingress.class: "nginx"
 spec:
+  ingressClassName: nginx
   rules:
-  - host: kota.dog
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: homepage
-            port:
-              number: 80
-  - host: www.kota.dog
+  - host: dev.kota.dog
     http:
       paths:
       - path: /

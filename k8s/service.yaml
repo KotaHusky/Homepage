@@ -7,7 +7,7 @@ spec:
   selector:
     app: homepage
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 3000
+  - protocol: TCP
+    port: 80
+    targetPort: 3000
   type: ClusterIP

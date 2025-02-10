@@ -7,14 +7,38 @@ IMAGE_NAME="homepage"
 IMAGE_TAG="latest"
 NAMESPACE="webapps"
 RESOURCE_GROUP="aks-shared"
-AKS_CLUSTER="aks-shared-prod-cluster"
+AKS_CLUSTER="aks-shared-cluster"
+SKIP_BUILD=false
 
-# Create a new builder instance
-docker buildx create --use
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --skip-build|-s) SKIP_BUILD=true ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
 
-# Build and push the multi-platform Docker image
-echo "Building and pushing the multi-platform Docker image..."
-docker buildx build --platform linux/amd64,linux/arm64 -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} --push .
+# Login to Azure Container Registry
+echo "Logging in to Azure Container Registry..."
+az acr login --name $ACR_NAME
+
+if [ "$SKIP_BUILD" = false ]; then
+    # Create a new builder instance
+    docker buildx create --use
+
+    # Pull the latest image to use as cache
+    docker pull ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} || true
+
+    # Build and push the multi-platform Docker image with cache
+    echo "Building and pushing the multi-platform Docker image..."
+    docker buildx build --platform linux/amd64,linux/arm64 \
+        --cache-from=type=registry,ref=${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} \
+        --cache-to=type=inline \
+        -t ${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG} --push .
+else
+    echo "Skipping Docker build and push..."
+fi
 
 # Check the effective outbound IPs for the AKS cluster
 az aks show --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --query "networkProfile.loadBalancerProfile.effectiveOutboundIPs"
@@ -24,6 +48,10 @@ az network public-ip list --resource-group $RESOURCE_GROUP --output table
 
 # List all load balancers in the resource group
 az network lb list --resource-group $RESOURCE_GROUP --output table
+
+# Get AKS credentials
+echo "Fetching AKS credentials..."
+az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
 
 # Apply the Kubernetes deployment file
 echo "Applying the Kubernetes deployment file..."
