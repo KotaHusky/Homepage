@@ -3,6 +3,9 @@ kind: Service
 metadata:
   name: homepage
   namespace: webapps
+  annotations:
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: "aks-shared"
+    service.beta.kubernetes.io/azure-pip-name: "aks-shared-public-ip"
 spec:
   selector:
     app: homepage
@@ -10,4 +13,4 @@ spec:
   - protocol: TCP
     port: 80
     targetPort: 3000
-  type: ClusterIP
+  type: LoadBalancer
