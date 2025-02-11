@@ -5,8 +5,13 @@ metadata:
   namespace: webapps
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-dns
 spec:
   ingressClassName: nginx
+  tls:
+  - hosts:
+    - dev.kota.dog
+    secretName: wildcard-kota.dog-tls
   rules:
   - host: dev.kota.dog
     http:
