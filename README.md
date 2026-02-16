@@ -22,16 +22,21 @@ This project demonstrates a production-grade CI/CD pipeline and container orches
 
 ```bash
 npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the app with hot reloading.
+
+### Production Preview
+
+```bash
 npm run build
 npm run serve
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the app.
-
 ### Other Commands
 
 ```bash
-npm run build    # Production build
 npm run test     # Run tests
 npm run lint     # Lint the codebase
 ```
