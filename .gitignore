@@ -44,5 +44,6 @@ Thumbs.db
 # Next.js
 .next
 
-# Claude Code
-.claude
+# Claude Code — keep agents, ignore everything else
+.claude/*
+!.claude/agents/
