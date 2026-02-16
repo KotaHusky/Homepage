@@ -16,11 +16,61 @@ jobs:
     with:
       node-version: '24'
 
+  commitlint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
   docker:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: verify
     uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
     with:
-      push: ${{ github.event_name == 'push' }}
+      push: true
+    permissions:
+      contents: read
+      packages: write
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci
+      - uses: cycjimmy/semantic-release-action@v4
+        id: semantic
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-release:
+    if: needs.release.outputs.new_release_published == 'true'
+    needs: [docker, release]
+    uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
+    with:
+      push: true
+      version: ${{ needs.release.outputs.new_release_version }}
     permissions:
       contents: read
       packages: write
