@@ -14,25 +14,28 @@
   },
   "packageManager": "npm@9.6.7",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
-    "next": "^14.0.0",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
+    "next": "^15.5.12",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
-    "@types/node": "18.16.9",
-    "@types/react": "19.0.8",
-    "@types/react-dom": "19.0.3",
+    "@types/node": "^20.19.33",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "7.18.0",
     "@typescript-eslint/parser": "7.18.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "10.4.13",
     "eslint": "8.57.1",
-    "eslint-config-next": "15.1.6",
+    "eslint-config-next": "^15.5.12",
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-import": "2.31.0",
     "eslint-plugin-jsx-a11y": "6.10.1",
@@ -47,9 +50,5 @@
     "typescript": "5.7.3",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"
-  },
-  "overrides": {
-    "@types/react": "19.0.8",
-    "@types/react-dom": "19.0.3"
   }
 }
