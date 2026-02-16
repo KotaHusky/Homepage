@@ -1,0 +1,12 @@
+.git
+.nx
+.next
+node_modules
+dist
+e2e
+*.md
+.eslintrc*
+.prettierrc*
+jest.config*
+vitest.config*
+tsconfig*.json
