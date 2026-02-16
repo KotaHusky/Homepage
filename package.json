@@ -6,11 +6,13 @@
     "serve": "npx next start",
     "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
     "build": "next build",
+    "lint": "next lint",
     "start": "npx next start",
     "start:docker-clean-build": "docker build -t homepage:latest .;docker run -p 3000:3000 homepage:latest",
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "packageManager": "npm@9.6.7",
   "private": true,
   "dependencies": {
     "@heroicons/react": "^2.0.18",
@@ -41,6 +43,7 @@
     "prettier": "^2.6.2",
     "tailwindcss": "3.4.3",
     "ts-node": "10.9.1",
+    "turbo": "^2.8.9",
     "typescript": "5.7.3",
     "vite": "^5.4.21",
     "vitest": "^2.1.9"

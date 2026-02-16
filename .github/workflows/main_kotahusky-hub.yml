@@ -24,10 +24,10 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: npm clean-install and build
+      - name: npm clean-install, lint, and build
         run: |
           npm ci
-          npm run build
+          npx turbo run lint build
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
