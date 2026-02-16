@@ -22,7 +22,8 @@ This project demonstrates a production-grade CI/CD pipeline and container orches
 
 ```bash
 npm install
-npm run dev
+npm run build
+npm run serve
 ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the app.
