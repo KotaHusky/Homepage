@@ -1,19 +1,23 @@
-name: Docker Build & Push to GHCR
+name: CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 permissions:
   contents: read
   packages: write
 
 jobs:
+  verify:
+    uses: KotaHusky/cicd-toolkit/.github/workflows/build-verify.yml@main
+    with:
+      node-version: '24'
+
   docker:
+    needs: verify
     uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
     with:
       push: ${{ github.event_name == 'push' }}
