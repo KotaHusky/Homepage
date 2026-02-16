@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/KotaHusky/Homepage/compare/v1.2.1...v1.3.0) (2026-02-16)
+
+
+### Features
+
+* profile picture carousel + exploration optimizations ([#25](https://github.com/KotaHusky/Homepage/issues/25)) ([d37b8ad](https://github.com/KotaHusky/Homepage/commit/d37b8ad5bd0c94af76109f190440e0dc98ff9374))
+
 ## [1.2.1](https://github.com/KotaHusky/Homepage/compare/v1.2.0...v1.2.1) (2026-02-16)
 
 
