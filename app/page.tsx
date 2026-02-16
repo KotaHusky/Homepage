@@ -8,8 +8,8 @@ export default async function Index() {
    * Note: The corresponding styles are in the ./index.css file.
    */
   return (
-    <div className="bg-vertical md:bg-horizontal">
-      <div className="flex flex-col items-center mx-24 text-center">
+    <div className="flex flex-col min-h-screen bg-vertical md:bg-horizontal">
+      <div className="flex flex-col flex-1 items-center mx-24 text-center">
         <ProfileCarousel />
         <h1 className="text-3xl font-bold mb-2">Kota Husky</h1>
         <div className="mb-4 flex items-center text-sm text-gray-500">
@@ -36,13 +36,15 @@ export default async function Index() {
           <HomepageButton buttonText={"Furtrack"} href={"https://www.furtrack.com/user/KotaHusky/"} />
           <HomepageButton buttonText={"Barks & Rec"} href={"https://bandr.org"} />
         </div>
-        <p className="text-md mb-2">Find me at</p>
-        <div className="flex mb-8 space-x-4 text-2xl">
-          <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} />
-          <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} />
-          <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} />
-          <SocialIcon icon={"fa-brands fa-telegram"} href={"https://t.me/KotaHusky"} />
-          {/* <SocialIcon icon={"fa-envelope"} /> TODO: REIMPLEMENT AS FORM */}
+        <div className="mt-auto mb-8">
+          <p className="text-md mb-2">Find me at</p>
+          <div className="flex space-x-4 text-2xl">
+            <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} />
+            <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} />
+            <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} />
+            <SocialIcon icon={"fa-brands fa-telegram"} href={"https://t.me/KotaHusky"} />
+            {/* <SocialIcon icon={"fa-envelope"} /> TODO: REIMPLEMENT AS FORM */}
+          </div>
         </div>
       </div>
     </div>
