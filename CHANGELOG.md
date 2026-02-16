@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/KotaHusky/Homepage/compare/v1.1.0...v1.2.0) (2026-02-16)
+
+
+### Features
+
+* adopt cicd-toolkit commitlint and add AI release ([#20](https://github.com/KotaHusky/Homepage/issues/20)) ([33e288d](https://github.com/KotaHusky/Homepage/commit/33e288d2a724995af01071719d501633f093d535))
+
 # [1.1.0](https://github.com/KotaHusky/Homepage/compare/v1.0.0...v1.1.0) (2026-02-16)
 
 
