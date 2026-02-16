@@ -17,17 +17,7 @@ jobs:
       node-version: '24'
 
   commitlint:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - run: npm ci
-      - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+    uses: KotaHusky/cicd-toolkit/.github/workflows/commitlint.yml@main
 
   docker:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -53,7 +43,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # required: semantic-release needs full history to find tags
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
