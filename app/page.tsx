@@ -1,4 +1,6 @@
-import { HomepageButton, SocialIcon } from "@homepage/ui";
+import { HomepageButton } from "./components/homepage-button";
+import { SocialIcon } from "./components/social-icon";
+import Image from 'next/image';
 import {MapPinIcon} from '@heroicons/react/20/solid'
 
 export default async function Index() {
@@ -9,7 +11,7 @@ export default async function Index() {
     <div className="bg-vertical md:bg-horizontal">
       <div className="flex flex-col items-center mx-24 text-center">
         <div className="my-8">
-          <img src="/images/kota.png" alt="Profile Picture" className="w-32 h-32 md:w-64 md:h-64 rounded-full" />
+          <Image src="/images/kota.png" alt="Profile Picture" width={256} height={256} className="w-32 h-32 md:w-64 md:h-64 rounded-full" />
         </div>
         <h1 className="text-3xl font-bold mb-2">Kota Husky</h1>
         <div className="mb-4 flex items-center text-sm text-gray-500">
@@ -17,7 +19,7 @@ export default async function Index() {
           <a href="https://maps.app.goo.gl/bnaBxUkmbfWcP6UX8" target="_blank" className="mr-4" >New England, USA</a>
         </div>
         <div className="mb-2">
-          <p className="text-lg mb-2">Digital & cloud enablement for events</p>
+          <p className="text-lg mb-2">Digital & cloud enablement for LGBT+ events</p>
           <p className="text-lg mb-2">Event and portrait photographer</p>
           <p className="text-lg mb-2">Founder of Barks & Rec</p>
         </div>
@@ -40,7 +42,7 @@ export default async function Index() {
         <div className="flex mb-8 space-x-4 text-2xl">
           <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} />
           <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} />
-          <SocialIcon icon={"fa-cloud-sun"} href={"https://bsky.app/profile/kota.dog"} />
+          <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} />
           <SocialIcon icon={"fa-brands fa-telegram"} href={"https://t.me/KotaHusky"} />
           {/* <SocialIcon icon={"fa-envelope"} /> TODO: REIMPLEMENT AS FORM */}
         </div>
