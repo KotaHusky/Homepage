@@ -14,17 +14,10 @@
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
-    "paths": {
-      "@homepage/ui": ["libs/ui/src/index.ts"]
-    }
+    "paths": {}
   },
   "exclude": [
     "node_modules",
-    "tmp",
-    "jest.config.ts",
-    "src/**/*.spec.ts",
-    "src/**/*.test.ts",
-    "**e2e/**/*",
-    "dist/homepage/**/*"
+    "tmp"
   ]
 }

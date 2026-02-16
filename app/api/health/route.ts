@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-inferrable-types */
 import { NextRequest, NextResponse } from 'next/server';
 
 // How long we wait before re-checking “expensive” resources

@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build, test, and deploy Node.js app to Azure Web App - KotaHusky-Hub
+name: Build and deploy Node.js app to Azure Web App - KotaHusky-Hub
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
       - 'v*'
 
 jobs:
-  build-test-and-deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -27,13 +27,7 @@ jobs:
       - name: npm clean-install and build
         run: |
           npm ci
-          npx nx build homepage --prod
-          cp ./app/server.js ./dist/homepage/server.js
-          ls -a ./dist/homepage
-        working-directory: .
-
-      - name: Run Nx tests
-        run: npx nx test
+          npm run build
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
@@ -41,4 +35,4 @@ jobs:
         with:
           app-name: 'KotaHusky-Hub'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_E06EE537669F47DAB3BE64A1168B7663 }}
-          package: ./dist/homepage
+          package: .
