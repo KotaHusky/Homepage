@@ -1,6 +1,6 @@
 import { HomepageButton } from "./components/homepage-button";
 import { SocialIcon } from "./components/social-icon";
-import Image from 'next/image';
+import { ProfileCarousel } from "./components/profile-carousel";
 import {MapPinIcon} from '@heroicons/react/20/solid'
 
 export default async function Index() {
@@ -10,9 +10,7 @@ export default async function Index() {
   return (
     <div className="bg-vertical md:bg-horizontal">
       <div className="flex flex-col items-center mx-24 text-center">
-        <div className="my-8">
-          <Image src="/images/kota.png" alt="Profile Picture" width={256} height={256} className="w-32 h-32 md:w-64 md:h-64 rounded-full" />
-        </div>
+        <ProfileCarousel />
         <h1 className="text-3xl font-bold mb-2">Kota Husky</h1>
         <div className="mb-4 flex items-center text-sm text-gray-500">
           <MapPinIcon className="mr-1.5 h-5 w-5 flex-shrink-0 text-gray-400" aria-hidden="true" />
