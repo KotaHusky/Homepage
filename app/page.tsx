@@ -2,6 +2,7 @@ import { HomepageButton } from "./components/homepage-button";
 import { SocialIcon } from "./components/social-icon";
 import { ProfileCarousel } from "./components/profile-carousel";
 import {MapPinIcon} from '@heroicons/react/20/solid'
+import packageJson from '../package.json'
 
 export default async function Index() {
   /*
@@ -47,6 +48,11 @@ export default async function Index() {
           </div>
         </div>
       </div>
+      <footer className="pb-3 pt-4 text-center text-sm text-gray-400 space-y-1">
+        <p>Made with <span className="text-xs">♥</span> by Kota Husky in NH</p>
+        <p><a href="https://github.com/KotaHusky/Homepage/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-gray-300 underline decoration-gray-500/50">MIT License</a></p>
+        <p>{process.env.NODE_ENV === 'production' ? `v${packageJson.version}` : 'local'}</p>
+      </footer>
     </div>
   );
 }
