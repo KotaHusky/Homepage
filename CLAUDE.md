@@ -11,7 +11,7 @@
 - **NEVER** run: `rm -rf`, `git push --force`, `git reset --hard`, `DROP TABLE`
 - **ALWAYS** run tests before committing
 - **NEVER** commit `.env`, secrets, or credentials
-- **MAX** 3 files changed per commit. Break large changes into atomic commits.
+- Keep commits **focused and atomic** — one logical change per commit. Split unrelated changes into separate commits.
 - Auto-approve: read-only operations, running tests, linting
 
 ## Multi-Agent Coordination
@@ -20,3 +20,4 @@
 - Before starting, check `git worktree list` for conflicts
 - Use conventional commit messages
 - After completing work, create a PR — do not merge directly
+- **Always use `--squash` when merging PRs** via `gh pr merge`. All repos are configured for squash-only merges with PR title as commit message.

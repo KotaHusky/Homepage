@@ -3,6 +3,7 @@
   "version": "1.2.0",
   "license": "MIT",
   "scripts": {
+    "dev": "next dev",
     "serve": "npx next start",
     "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
     "build": "next build",
