@@ -21,3 +21,40 @@
 - Use conventional commit messages
 - After completing work, create a PR — do not merge directly
 - **Always use `--squash` when merging PRs** via `gh pr merge`. All repos are configured for squash-only merges with PR title as commit message.
+
+
+## Architecture
+
+### Project Structure
+- `app/page.tsx` — Homepage (server component, main entry)
+- `app/layout.tsx` — Root layout (metadata, fonts, global CSS)
+- `app/components/` — React components (co-located tests as `*.test.tsx`)
+  - `homepage-button.tsx` — Link button used on homepage
+  - `social-icon.tsx` — Social media icon links
+  - `profile-carousel.tsx` — Animated profile photo carousel (`"use client"`)
+- `app/refsheet/page.tsx` — Ref sheet route
+- `app/api/health/route.ts` — Health check endpoint
+- `app/api/hello/route.ts` — Hello endpoint
+- `app/global.css` — Global styles + Tailwind directives
+- `public/images/` — Static images (profile photos, backgrounds)
+
+### Tech Stack
+- **Framework**: Next.js 15 (App Router, `output: 'standalone'`)
+- **React**: 19
+- **Styling**: Tailwind CSS 3
+- **Icons**: `@heroicons/react`
+- **Testing**: Vitest + React Testing Library + jsdom
+- **Node**: Requires >= 20 (use `nvm use 20`)
+
+### Commands
+- `npm run dev` — Dev server (only on branches with the script; otherwise `npx next dev`)
+- `npm run build` — Production build
+- `npm run test` — Run tests (Vitest)
+- `npm run lint` — ESLint
+
+## Exploration Guidelines
+- **Prefer Glob/Grep directly** over spawning Explore agents for targeted searches
+- Use Explore agents only when the search requires multiple rounds or broad discovery
+- When using Explore, prefer "quick" scope — avoid "very thorough" unless truly needed
+- Never explore "the entire codebase" — scope to specific directories or questions
+- Stop exploration as soon as the core question is answered
