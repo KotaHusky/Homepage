@@ -22,6 +22,13 @@
 - After completing work, create a PR — do not merge directly
 - **Always use `--squash` when merging PRs** via `gh pr merge`. All repos are configured for squash-only merges with PR title as commit message.
 
+## Git Hygiene
+- **Always `git fetch origin main`** before creating a new branch. Branch from `origin/main`, not a stale local `main`.
+- **Never reuse a branch after its PR is merged.** Squash merges rewrite history — rebasing a merged branch onto main will cause conflicts with its own commits. Start a fresh branch instead.
+- **Commit early, commit often.** Small atomic commits rebase cleanly. Large uncommitted working trees do not.
+- **Check `.gitignore` covers generated dirs** (`.nx`, `.next`, `.turbo`, `node_modules`) before stashing or rebasing. Unignored generated files cause stash/checkout failures.
+- **Prefer `git merge origin/main`** over `git rebase` when a branch has complex history or untracked files that may conflict. Merge is safer and easier to recover from.
+- When conflicts arise during rebase, check if the conflicting commit was already squash-merged to main — if so, `git rebase --skip` it.
 
 ## Architecture
 
