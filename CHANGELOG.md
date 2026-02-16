@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/KotaHusky/Homepage/compare/v1.2.0...v1.2.1) (2026-02-16)
+
+
+### Bug Fixes
+
+* full-viewport layout, hydration error, and dev server ([#23](https://github.com/KotaHusky/Homepage/issues/23)) ([d5ca9ba](https://github.com/KotaHusky/Homepage/commit/d5ca9bacb0fcde16bd33f8923c70f861052632c2))
+
 # [1.2.0](https://github.com/KotaHusky/Homepage/compare/v1.1.0...v1.2.0) (2026-02-16)
 
 

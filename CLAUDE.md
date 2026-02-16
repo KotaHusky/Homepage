@@ -22,6 +22,7 @@
 - After completing work, create a PR — do not merge directly
 - **Always use `--squash` when merging PRs** via `gh pr merge`. All repos are configured for squash-only merges with PR title as commit message.
 
+
 ## Architecture
 
 ### Project Structure
