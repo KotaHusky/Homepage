@@ -193,16 +193,22 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
 
 /**
  * Resolves the Cloudflare API token from environment or wrangler config.
+ * Checks CLOUDFLARE_API_TOKEN env var first, then wrangler's stored OAuth token.
  * @returns The API token, or `null` if not found.
  */
 function resolveCfApiToken(): string | null {
   // 1. Environment variable (highest priority)
   if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
 
-  // 2. Wrangler's stored OAuth token — extract from config file
+  // 2. Wrangler's stored OAuth token — search known config locations
+  const home = process.env.HOME ?? '';
   const configPaths = [
-    resolve(process.env.HOME ?? '', '.wrangler/config/default.toml'),
-    resolve(process.env.XDG_CONFIG_HOME ?? resolve(process.env.HOME ?? '', '.config'), 'wrangler/config/default.toml'),
+    // macOS: ~/Library/Preferences/.wrangler/config/default.toml
+    resolve(home, 'Library/Preferences/.wrangler/config/default.toml'),
+    // Linux/fallback: ~/.wrangler/config/default.toml
+    resolve(home, '.wrangler/config/default.toml'),
+    // XDG config
+    resolve(process.env.XDG_CONFIG_HOME ?? resolve(home, '.config'), 'wrangler/config/default.toml'),
   ];
   for (const p of configPaths) {
     if (!existsSync(p)) continue;
@@ -417,9 +423,9 @@ function preflight(): boolean {
     console.log(pc.yellow('⚠') + ' Cloudflare API token not found (custom domain step will be skipped)');
     console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
   } else {
-    // Verify the token works
+    // Verify the token works (try /user which works for both OAuth and API tokens)
     const verifyResult = tryRun(
-      `curl -sf "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer ${cfApiToken}"`
+      `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer ${cfApiToken}"`
     );
     if (verifyResult) {
       wranglerAvailable = true;
