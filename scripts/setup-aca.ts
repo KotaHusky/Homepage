@@ -322,23 +322,28 @@ async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<voi
   const { type, name, content, proxied, displayName } = opts;
 
   // Cloudflare API expects the fully-qualified record name for lookups
-  // Look up existing records of this type+name
+  // Look up existing records matching this name (any type — catch conflicts like A vs CNAME)
   let existingId: string | null = null;
   let existingContent: string | null = null;
+  let existingType: string | null = null;
   try {
-    const resp = cfApi('GET', `/zones/${zoneId}/dns_records?type=${type}&name=${encodeURIComponent(displayName)}`) as {
-      result?: Array<{ id: string; content: string }>;
+    const resp = cfApi('GET', `/zones/${zoneId}/dns_records?name=${encodeURIComponent(displayName)}`) as {
+      result?: Array<{ id: string; content: string; type: string }>;
     };
-    const match = resp.result?.[0];
+    // Prefer exact type match; otherwise take the first conflicting record
+    const exactMatch = resp.result?.find((r) => r.type === type);
+    const anyMatch = resp.result?.[0];
+    const match = exactMatch ?? anyMatch;
     if (match) {
       existingId = match.id;
       existingContent = match.content;
+      existingType = match.type;
     }
   } catch {
     // list failed — fall through to create
   }
 
-  if (existingId && existingContent === content) {
+  if (existingId && existingType === type && existingContent === content) {
     console.log(`  ${pc.green('✓')} ${type} ${displayName} already correct`);
     return;
   }
@@ -347,10 +352,23 @@ async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<voi
   const recordBody = { type, name: displayName, content, proxied, ttl: 1 };
 
   if (existingId) {
-    await cfApiAsync(
-      `Updating ${type} ${displayName} → ${content}`,
-      'PUT', `/zones/${zoneId}/dns_records/${existingId}`, recordBody
-    );
+    // If existing record is a different type (e.g. A → CNAME), delete it first
+    if (existingType && existingType !== type) {
+      console.log(`  ${pc.yellow('⚠')} Replacing ${existingType} record with ${type} for ${displayName}`);
+      await cfApiAsync(
+        `Deleting conflicting ${existingType} ${displayName}`,
+        'DELETE', `/zones/${zoneId}/dns_records/${existingId}`
+      );
+      await cfApiAsync(
+        `Creating ${type} ${displayName} → ${content}`,
+        'POST', `/zones/${zoneId}/dns_records`, recordBody
+      );
+    } else {
+      await cfApiAsync(
+        `Updating ${type} ${displayName} → ${content}`,
+        'PUT', `/zones/${zoneId}/dns_records/${existingId}`, recordBody
+      );
+    }
   } else {
     await cfApiAsync(
       `Creating ${type} ${displayName} → ${content}`,
@@ -368,7 +386,7 @@ async function cfApiAsync(
   body?: Record<string, unknown>,
 ): Promise<string> {
   const args = [
-    `curl -sS --fail-with-body -X ${method}`,
+    `curl -sS -X ${method}`,
     `"https://api.cloudflare.com/client/v4${path}"`,
     `-H "Authorization: Bearer $CF_TOKEN"`,
     `-H "Content-Type: application/json"`,
@@ -382,11 +400,19 @@ async function cfApiAsync(
     const { stdout } = await execAsync(cmd, {
       env: { ...process.env, CF_TOKEN: cfApiToken ?? '' },
     });
+    const resp = JSON.parse(stdout);
+    if (!resp.success) {
+      const errors = (resp.errors ?? []).map((e: { message: string; code?: number }) =>
+        e.code ? `${e.message} (code ${e.code})` : e.message
+      ).join('; ');
+      spinner.error({ text: label });
+      throw new Error(`Cloudflare API error: ${errors}`);
+    }
     spinner.success({ text: label });
     return stdout.trim();
   } catch (err) {
+    if (err instanceof Error && err.message.startsWith('Cloudflare API error:')) throw err;
     spinner.error({ text: label });
-    // Sanitize error — don't leak token
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(msg.replace(/Bearer [^\s"]+/g, 'Bearer ***'));
   }
