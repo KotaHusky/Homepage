@@ -189,6 +189,68 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
   }
 }
 
+// ─── DNS helpers ─────────────────────────────────────────────────────────────
+
+/** Options for creating or updating a Cloudflare DNS record. */
+interface DnsRecordOpts {
+  type: 'CNAME' | 'TXT';
+  name: string;
+  content: string;
+  proxied: boolean;
+  displayName: string;
+}
+
+/**
+ * Creates, updates, or skips a Cloudflare DNS record.
+ * - If a record of the same type and name exists with the correct content → skip.
+ * - If it exists with different content → update in place.
+ * - If it doesn't exist → create.
+ * @param zoneId - Cloudflare zone ID.
+ * @param opts - Record options.
+ */
+async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<void> {
+  const { type, name, content, proxied, displayName } = opts;
+  const proxiedFlag = proxied ? '--proxied true' : '--proxied false';
+
+  // Look up existing records of this type+name
+  let existingId: string | null = null;
+  let existingContent: string | null = null;
+  try {
+    const recordsRaw = tryRun(
+      `wrangler dns record list ${zoneId} --name "${name}" --json 2>/dev/null`
+    );
+    if (recordsRaw) {
+      const records = JSON.parse(recordsRaw);
+      const match = records.find((r: { type: string }) => r.type === type);
+      if (match) {
+        existingId = match.id;
+        existingContent = match.content;
+      }
+    }
+  } catch {
+    // list failed — fall through to create
+  }
+
+  if (existingId && existingContent === content) {
+    console.log(`  ${pc.green('✓')} ${type} ${displayName} already correct`);
+    return;
+  }
+
+  if (existingId) {
+    // Update existing record
+    await runWithSpinner(
+      `Updating ${type} ${displayName} → ${content}`,
+      `wrangler dns record update ${existingId} --zone-id ${zoneId} --type ${type} --name "${name}" --content "${content}" ${proxiedFlag}`
+    );
+  } else {
+    // Create new record
+    await runWithSpinner(
+      `Creating ${type} ${displayName} → ${content}`,
+      `wrangler dns record create ${zoneId} --type ${type} --name "${name}" --content "${content}" ${proxiedFlag}`
+    );
+  }
+}
+
 // ─── Azure detection ─────────────────────────────────────────────────────────
 
 /** Snapshot of an existing Azure Container App discovered via `az containerapp show`. */
@@ -810,41 +872,40 @@ async function deploy(config: Config): Promise<void> {
     // output parsing failed — non-critical
   }
 
-  // Custom domain: Cloudflare CNAME + ACA binding
+  // Custom domain: Cloudflare DNS records + ACA binding
   if (config.CUSTOM_DOMAIN && config.CF_ZONE_ID && fqdn) {
     console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
 
-    // Step A — Cloudflare CNAME (skip if it already points to the right FQDN)
     const subdomain = config.CUSTOM_DOMAIN.split('.').slice(0, -2).join('.') || '@';
-    let cnameExists = false;
-    try {
-      const recordsRaw = tryRun(
-        `wrangler dns record list ${config.CF_ZONE_ID} --name "${subdomain}" --json 2>/dev/null`
-      );
-      if (recordsRaw) {
-        const records = JSON.parse(recordsRaw);
-        cnameExists = records.some(
-          (r: { type: string; content: string }) => r.type === 'CNAME' && r.content === fqdn
-        );
-      }
-    } catch {
-      // list failed — proceed to create
-    }
 
-    if (cnameExists) {
-      console.log(`  ${pc.green('✓')} CNAME already exists: ${config.CUSTOM_DOMAIN} → ${fqdn}`);
+    // Step A — CNAME record: create or update
+    await upsertDnsRecord(config.CF_ZONE_ID, {
+      type: 'CNAME',
+      name: subdomain,
+      content: fqdn,
+      proxied: true,
+      displayName: config.CUSTOM_DOMAIN,
+    });
+
+    // Step B — TXT validation record for Azure (asuid.<subdomain>)
+    const verificationId = tryRun(
+      `az containerapp show --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --query "properties.customDomainVerificationId" -o tsv 2>/dev/null`
+    );
+
+    if (verificationId) {
+      const txtName = subdomain === '@' ? 'asuid' : `asuid.${subdomain}`;
+      await upsertDnsRecord(config.CF_ZONE_ID, {
+        type: 'TXT',
+        name: txtName,
+        content: verificationId,
+        proxied: false,
+        displayName: `${txtName}.${rootDomain(config.CUSTOM_DOMAIN)}`,
+      });
     } else {
-      try {
-        await runWithSpinner(
-          `Creating CNAME ${config.CUSTOM_DOMAIN} → ${fqdn}`,
-          `wrangler dns record create ${config.CF_ZONE_ID} --type CNAME --name "${subdomain}" --content "${fqdn}" --proxied true`
-        );
-      } catch {
-        console.log(pc.dim('  CNAME may already exist, continuing...'));
-      }
+      console.log(pc.yellow('⚠') + ' Could not retrieve domain verification ID — TXT record skipped');
     }
 
-    // Step B — ACA custom domain binding (skip if already bound)
+    // Step C — ACA custom domain binding (skip if already bound)
     const detectedForDeploy = detectExistingApp(config.APP_NAME, config.RESOURCE_GROUP);
     const domainAlreadyBound = detectedForDeploy?.customDomains.includes(config.CUSTOM_DOMAIN) ?? false;
 
@@ -866,7 +927,7 @@ async function deploy(config: Config): Promise<void> {
       }
     }
 
-    // Step C — Print custom URL
+    // Step D — Print custom URL
     console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${config.CUSTOM_DOMAIN}`))}`);
   }
 
