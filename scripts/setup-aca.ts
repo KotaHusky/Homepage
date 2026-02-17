@@ -1240,12 +1240,16 @@ async function configureDns(
       }
     }
 
+    // Root domains (e.g. kota.dog) require TXT validation; subdomains use CNAME
+    const isRootDomain = customDomain.split('.').length === 2;
+    const validationMethod = isRootDomain ? 'TXT' : 'CNAME';
+
     try {
       await runWithSpinner(
-        `Binding managed certificate for ${customDomain}`,
-        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${envName}" --validation-method CNAME`
+        `Binding managed certificate for ${customDomain} (${validationMethod} validation)`,
+        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod}`
       );
-      console.log(pc.dim('  Managed certificate provisioning may take 1–2 minutes.'));
+      console.log(pc.dim('  Managed certificate provisioning may take up to 20 minutes.'));
     } catch (err) {
       console.log(pc.yellow('⚠') + ` Certificate binding failed: ${err instanceof Error ? err.message : String(err)}`);
       console.log(pc.dim('  You can retry from the wizard menu or bind manually in the Azure portal.'));
@@ -1527,12 +1531,16 @@ async function main(): Promise<void> {
         // May already be added — continue
       }
 
+      // Root domains (e.g. kota.dog) require TXT validation; subdomains use CNAME
+      const isRootDomain = customDomain.trim().split('.').length === 2;
+      const validationMethod = isRootDomain ? 'TXT' : 'CNAME';
+
       try {
         await runWithSpinner(
-          `Binding managed certificate for ${customDomain}`,
-          `az containerapp hostname bind --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}" --environment "${envName}" --validation-method CNAME`
+          `Binding managed certificate for ${customDomain} (${validationMethod} validation)`,
+          `az containerapp hostname bind --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod}`
         );
-        console.log(pc.dim('\n  Managed certificate provisioning may take 1–2 minutes.'));
+        console.log(pc.dim('\n  Managed certificate provisioning may take up to 20 minutes.'));
         console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${customDomain}`))}\n`);
       } catch (err) {
         console.log(pc.yellow('\n⚠') + ` Certificate binding failed: ${err instanceof Error ? err.message : String(err)}`);
