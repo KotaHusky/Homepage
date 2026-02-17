@@ -40,6 +40,7 @@ interface Config {
   RESOURCE_GROUP: string;
   TARGET_PORT: string;
   MIN_REPLICAS: string;
+  MAX_REPLICAS: string;
   CUSTOM_DOMAIN: string;
   CF_ZONE_ID: string;
 }
@@ -123,7 +124,7 @@ function loadConfig(): Partial<Config> {
 function isConfigKey(key: string): key is keyof Config {
   const validKeys: Array<keyof Config> = [
     'GITHUB_OWNER', 'GITHUB_REPO', 'IMAGE_TAG', 'AZURE_REGION',
-    'APP_NAME', 'RESOURCE_GROUP', 'TARGET_PORT', 'MIN_REPLICAS',
+    'APP_NAME', 'RESOURCE_GROUP', 'TARGET_PORT', 'MIN_REPLICAS', 'MAX_REPLICAS',
     'CUSTOM_DOMAIN', 'CF_ZONE_ID',
   ];
   return validKeys.includes(key as keyof Config);
@@ -195,6 +196,7 @@ interface DetectedApp {
   image: string;
   targetPort: string;
   minReplicas: string;
+  maxReplicas: string;
   fqdn: string;
   region: string;
   customDomains: string[];
@@ -222,6 +224,7 @@ function detectExistingApp(appName: string, resourceGroup: string): DetectedApp 
       image: container?.image ?? '',
       targetPort: String(ingress?.targetPort ?? ''),
       minReplicas: String(scale?.minReplicas ?? '0'),
+      maxReplicas: String(scale?.maxReplicas ?? '2'),
       fqdn: ingress?.fqdn ?? '',
       region: app.location ?? '',
       customDomains: (ingress?.customDomains ?? []).map((d: { name: string }) => d.name),
@@ -514,6 +517,7 @@ interface AppConfig {
   resourceGroup: string;
   targetPort: string;
   minReplicas: string;
+  maxReplicas: string;
 }
 
 /**
@@ -550,8 +554,19 @@ async function configureApp(saved: Partial<Config>): Promise<AppConfig> {
     },
   });
 
+  const maxReplicas = await input({
+    message: 'Maximum replicas:',
+    default: saved.MAX_REPLICAS ?? '2',
+    validate: (v) => {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1) return 'Must be a positive integer';
+      if (n < Number(minReplicas)) return `Must be ≥ min replicas (${minReplicas})`;
+      return true;
+    },
+  });
+
   console.log();
-  return { appName: appName.trim(), resourceGroup: resourceGroup.trim(), targetPort, minReplicas };
+  return { appName: appName.trim(), resourceGroup: resourceGroup.trim(), targetPort, minReplicas, maxReplicas };
 }
 
 // ─── Custom domain configuration ─────────────────────────────────────────────
@@ -659,6 +674,7 @@ function printSummary(config: Config, detected?: DetectedApp | null): void {
     detectedValues['Azure Region'] = detected.region;
     detectedValues['Target Port'] = detected.targetPort;
     detectedValues['Min Replicas'] = detected.minReplicas;
+    detectedValues['Max Replicas'] = detected.maxReplicas;
     if (detected.customDomains.length > 0) {
       detectedValues['Custom Domain'] = detected.customDomains[0];
     }
@@ -673,6 +689,7 @@ function printSummary(config: Config, detected?: DetectedApp | null): void {
     ['Resource Group', config.RESOURCE_GROUP],
     ['Target Port', config.TARGET_PORT],
     ['Min Replicas', config.MIN_REPLICAS],
+    ['Max Replicas', config.MAX_REPLICAS],
   ];
 
   if (config.CUSTOM_DOMAIN) {
@@ -755,7 +772,7 @@ async function deploy(config: Config): Promise<void> {
   const containerImage = `ghcr.io/${config.GITHUB_OWNER}/${config.GITHUB_REPO}:${config.IMAGE_TAG}`.toLowerCase();
   console.log(pc.dim(`    • ${pc.white('Container App')}  → ${config.APP_NAME}`));
   console.log(pc.dim(`      Runs ${containerImage}`));
-  console.log(pc.dim(`      HTTPS ingress on port ${config.TARGET_PORT}, ${config.MIN_REPLICAS}–10 replicas (HTTP auto-scale)`));
+  console.log(pc.dim(`      HTTPS ingress on port ${config.TARGET_PORT}, ${config.MIN_REPLICAS}–${config.MAX_REPLICAS} replicas (HTTP auto-scale)`));
   console.log(pc.dim(`      Resources: 0.25 vCPU, 0.5 Gi memory per replica\n`));
 
   const deployOutput = await runWithSpinner(
@@ -770,6 +787,7 @@ async function deploy(config: Config): Promise<void> {
       `containerImage="${containerImage}"`,
       `targetPort=${config.TARGET_PORT}`,
       `minReplicas=${config.MIN_REPLICAS}`,
+      `maxReplicas=${config.MAX_REPLICAS}`,
       `-o json`,
     ].join(' ')
   );
@@ -1068,6 +1086,7 @@ async function runPromptFlow(saved: Partial<Config>, wranglerAvailable: boolean)
     RESOURCE_GROUP: appConfig.resourceGroup,
     TARGET_PORT: appConfig.targetPort,
     MIN_REPLICAS: appConfig.minReplicas,
+    MAX_REPLICAS: appConfig.maxReplicas,
     CUSTOM_DOMAIN: customDomain,
     CF_ZONE_ID: cfZoneId,
   };
@@ -1103,7 +1122,7 @@ async function main(): Promise<void> {
       spinner.success({ text: `Found container app ${pc.cyan(saved.APP_NAME)} in rg ${pc.cyan(saved.RESOURCE_GROUP)} (${detected.region})` });
       console.log(pc.dim(`  Image:    ${detected.image}`));
       console.log(pc.dim(`  Port:     ${detected.targetPort}`));
-      console.log(pc.dim(`  Replicas: ${detected.minReplicas}–10`));
+      console.log(pc.dim(`  Replicas: ${detected.minReplicas}–${detected.maxReplicas}`));
       if (detected.fqdn) console.log(pc.dim(`  FQDN:     ${detected.fqdn}`));
       if (detected.customDomains.length > 0) {
         console.log(pc.dim(`  Domains:  ${detected.customDomains.join(', ')}`));
@@ -1135,6 +1154,7 @@ async function main(): Promise<void> {
         RESOURCE_GROUP: saved.RESOURCE_GROUP!,
         TARGET_PORT: detected.targetPort || saved.TARGET_PORT || '3000',
         MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS || '0',
+        MAX_REPLICAS: detected.maxReplicas || saved.MAX_REPLICAS || '2',
         CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN || '',
         CF_ZONE_ID: saved.CF_ZONE_ID || '',
       };
@@ -1149,6 +1169,7 @@ async function main(): Promise<void> {
         AZURE_REGION: detected.region || saved.AZURE_REGION,
         TARGET_PORT: detected.targetPort || saved.TARGET_PORT,
         MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS,
+        MAX_REPLICAS: detected.maxReplicas || saved.MAX_REPLICAS,
         CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN,
       };
 
