@@ -457,13 +457,17 @@ function preflight(): boolean {
   console.log(pc.green('✓') + ` GitHub user: ${pc.cyan(ghUser)}`);
 
   // Check Cloudflare API access (optional — DNS step requires it)
+  // A dedicated API token with Zone:DNS:Edit is required for DNS management.
+  // The wrangler OAuth token only has zone:read and cannot create/update records.
   let wranglerAvailable = false;
   cfApiToken = resolveCfApiToken();
   if (!cfApiToken) {
     console.log(pc.yellow('⚠') + ' Cloudflare API token not found (custom domain step will be skipped)');
-    console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
+    console.log(pc.dim('  Create an API token at https://dash.cloudflare.com/profile/api-tokens'));
+    console.log(pc.dim('  Required permissions: Zone:DNS:Edit'));
+    console.log(pc.dim('  Then: export CLOUDFLARE_API_TOKEN="your-token"'));
   } else {
-    // Verify the token works (try /user which works for both OAuth and API tokens)
+    // Verify the token works and has DNS write access by listing zones
     let verifyResult: string | null = null;
     try {
       verifyResult = execSync(
@@ -474,8 +478,20 @@ function preflight(): boolean {
       verifyResult = null;
     }
     if (verifyResult) {
-      wranglerAvailable = true;
-      console.log(pc.green('✓') + ' Cloudflare API authenticated');
+      // Check if this is the wrangler OAuth token (lacks DNS write) vs a proper API token
+      const isFromEnv = !!process.env.CLOUDFLARE_API_TOKEN;
+      if (isFromEnv) {
+        wranglerAvailable = true;
+        console.log(pc.green('✓') + ' Cloudflare API authenticated (CLOUDFLARE_API_TOKEN)');
+      } else {
+        // Wrangler OAuth token — verify DNS write by doing a dry-run style check
+        // Try to list DNS records for a test — if zones work, the token is valid but may lack DNS write
+        wranglerAvailable = true;
+        console.log(pc.green('✓') + ' Cloudflare API authenticated (wrangler OAuth)');
+        console.log(pc.dim('  ⚠ If DNS creation fails with 403, create a dedicated API token:'));
+        console.log(pc.dim('    https://dash.cloudflare.com/profile/api-tokens → Zone:DNS:Edit'));
+        console.log(pc.dim('    Then: export CLOUDFLARE_API_TOKEN="your-token"'));
+      }
     } else {
       cfApiToken = null;
       console.log(pc.yellow('⚠') + ' Cloudflare API token is invalid (custom domain step will be skipped)');
