@@ -224,7 +224,8 @@ function resolveCfApiToken(): string | null {
 let cfApiToken: string | null = null;
 
 /**
- * Calls the Cloudflare API.
+ * Calls the Cloudflare API. Uses environment variable for the token to avoid
+ * leaking it in error messages or process listings.
  * @param method - HTTP method.
  * @param path - API path (e.g. `/zones`).
  * @param body - Optional JSON body.
@@ -232,15 +233,19 @@ let cfApiToken: string | null = null;
  */
 function cfApi(method: string, path: string, body?: Record<string, unknown>): unknown {
   const args = [
-    `curl -sf -X ${method}`,
+    `curl -sS --fail-with-body -X ${method}`,
     `"https://api.cloudflare.com/client/v4${path}"`,
-    `-H "Authorization: Bearer ${cfApiToken}"`,
+    `-H "Authorization: Bearer $CF_TOKEN"`,
     `-H "Content-Type: application/json"`,
   ];
   if (body) {
     args.push(`-d '${JSON.stringify(body)}'`);
   }
-  const raw = run(args.join(' '));
+  const raw = execSync(args.join(' '), {
+    encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+    env: { ...process.env, CF_TOKEN: cfApiToken ?? '' },
+  }).trim();
   return JSON.parse(raw);
 }
 
@@ -264,11 +269,12 @@ interface DnsRecordOpts {
 async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<void> {
   const { type, name, content, proxied, displayName } = opts;
 
+  // Cloudflare API expects the fully-qualified record name for lookups
   // Look up existing records of this type+name
   let existingId: string | null = null;
   let existingContent: string | null = null;
   try {
-    const resp = cfApi('GET', `/zones/${zoneId}/dns_records?type=${type}&name=${encodeURIComponent(name)}`) as {
+    const resp = cfApi('GET', `/zones/${zoneId}/dns_records?type=${type}&name=${encodeURIComponent(displayName)}`) as {
       result?: Array<{ id: string; content: string }>;
     };
     const match = resp.result?.[0];
@@ -285,18 +291,52 @@ async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<voi
     return;
   }
 
-  const recordBody = { type, name, content, proxied, ttl: 1 };
+  // Use the full domain name for the record (Cloudflare resolves it relative to the zone)
+  const recordBody = { type, name: displayName, content, proxied, ttl: 1 };
 
   if (existingId) {
-    await runWithSpinner(
+    await cfApiAsync(
       `Updating ${type} ${displayName} → ${content}`,
-      `curl -sf -X PUT "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${existingId}" -H "Authorization: Bearer ${cfApiToken}" -H "Content-Type: application/json" -d '${JSON.stringify(recordBody)}'`
+      'PUT', `/zones/${zoneId}/dns_records/${existingId}`, recordBody
     );
   } else {
-    await runWithSpinner(
+    await cfApiAsync(
       `Creating ${type} ${displayName} → ${content}`,
-      `curl -sf -X POST "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records" -H "Authorization: Bearer ${cfApiToken}" -H "Content-Type: application/json" -d '${JSON.stringify(recordBody)}'`
+      'POST', `/zones/${zoneId}/dns_records`, recordBody
     );
+  }
+}
+
+/**
+ * Calls the Cloudflare API asynchronously with a spinner. Token is passed
+ * via environment variable to avoid leaking in error output.
+ */
+async function cfApiAsync(
+  label: string, method: string, path: string,
+  body?: Record<string, unknown>,
+): Promise<string> {
+  const args = [
+    `curl -sS --fail-with-body -X ${method}`,
+    `"https://api.cloudflare.com/client/v4${path}"`,
+    `-H "Authorization: Bearer $CF_TOKEN"`,
+    `-H "Content-Type: application/json"`,
+  ];
+  if (body) {
+    args.push(`-d '${JSON.stringify(body)}'`);
+  }
+  const cmd = args.join(' ');
+  const spinner = createSpinner(label).start();
+  try {
+    const { stdout } = await execAsync(cmd, {
+      env: { ...process.env, CF_TOKEN: cfApiToken ?? '' },
+    });
+    spinner.success({ text: label });
+    return stdout.trim();
+  } catch (err) {
+    spinner.error({ text: label });
+    // Sanitize error — don't leak token
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(msg.replace(/Bearer [^\s"]+/g, 'Bearer ***'));
   }
 }
 
@@ -424,9 +464,15 @@ function preflight(): boolean {
     console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
   } else {
     // Verify the token works (try /user which works for both OAuth and API tokens)
-    const verifyResult = tryRun(
-      `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer ${cfApiToken}"`
-    );
+    let verifyResult: string | null = null;
+    try {
+      verifyResult = execSync(
+        `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer $CF_TOKEN"`,
+        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: cfApiToken } }
+      ).trim() || null;
+    } catch {
+      verifyResult = null;
+    }
     if (verifyResult) {
       wranglerAvailable = true;
       console.log(pc.green('✓') + ' Cloudflare API authenticated');
