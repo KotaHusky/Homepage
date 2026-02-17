@@ -231,17 +231,30 @@ async function ensureCfApiToken(repoSlug: string): Promise<string> {
     token = token.trim();
   }
 
-  // Verify the token works
+  // Verify the token works (use /user/tokens/verify — works regardless of token scopes)
   const spinner = createSpinner('Verifying Cloudflare API token...').start();
   try {
-    execSync(
-      `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer $CF_TOKEN"`,
+    const raw = execSync(
+      `curl -sS "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer $CF_TOKEN"`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: token } }
     );
-    spinner.success({ text: 'Cloudflare API token verified' });
-  } catch {
-    spinner.error({ text: 'Cloudflare API token is invalid' });
-    throw new Error('Invalid Cloudflare API token. Create one at https://dash.cloudflare.com/profile/api-tokens with Zone:DNS:Edit permission.');
+    const resp = JSON.parse(raw);
+    if (resp.success && resp.result?.status === 'active') {
+      spinner.success({ text: 'Cloudflare API token verified' });
+    } else {
+      const errMsg = resp.errors?.map((e: { message: string }) => e.message).join(', ') || 'unknown error';
+      spinner.error({ text: 'Cloudflare API token verification failed' });
+      throw new Error(`Cloudflare token is not active: ${errMsg}`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Cloudflare token')) throw err;
+    spinner.error({ text: 'Cloudflare API token verification failed' });
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Could not verify Cloudflare API token: ${msg.replace(/Bearer [^\s"]+/g, 'Bearer ***')}\n` +
+      '  Make sure you\'re using an API Token (not Global API Key).\n' +
+      '  Create one at: https://dash.cloudflare.com/profile/api-tokens'
+    );
   }
 
   cfApiToken = token;
