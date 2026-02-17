@@ -25,6 +25,12 @@ param minReplicas int = 0
 @minValue(1)
 param maxReplicas int = 10
 
+@description('CPU cores per replica (e.g. 0.25, 0.5, 0.75, 1.0, 1.5, 2.0)')
+param cpuCores string = '0.25'
+
+@description('Memory per replica (e.g. 0.5Gi, 1.0Gi, 1.5Gi, 2.0Gi, 3.0Gi, 4.0Gi)')
+param memory string = '0.5Gi'
+
 // ─── Log Analytics Workspace ─────────────────────────────────────────────────
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
@@ -76,8 +82,8 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
           name: appName
           image: containerImage
           resources: {
-            cpu: json('0.25')
-            memory: '0.5Gi'
+            cpu: json(cpuCores)
+            memory: memory
           }
         }
       ]

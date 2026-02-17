@@ -41,6 +41,8 @@ interface Config {
   TARGET_PORT: string;
   MIN_REPLICAS: string;
   MAX_REPLICAS: string;
+  CPU_CORES: string;
+  MEMORY: string;
   CUSTOM_DOMAIN: string;
   CF_ZONE_ID: string;
 }
@@ -125,7 +127,7 @@ function isConfigKey(key: string): key is keyof Config {
   const validKeys: Array<keyof Config> = [
     'GITHUB_OWNER', 'GITHUB_REPO', 'IMAGE_TAG', 'AZURE_REGION',
     'APP_NAME', 'RESOURCE_GROUP', 'TARGET_PORT', 'MIN_REPLICAS', 'MAX_REPLICAS',
-    'CUSTOM_DOMAIN', 'CF_ZONE_ID',
+    'CPU_CORES', 'MEMORY', 'CUSTOM_DOMAIN', 'CF_ZONE_ID',
   ];
   return validKeys.includes(key as keyof Config);
 }
@@ -442,6 +444,8 @@ interface DetectedApp {
   targetPort: string;
   minReplicas: string;
   maxReplicas: string;
+  cpuCores: string;
+  memory: string;
   fqdn: string;
   region: string;
   customDomains: string[];
@@ -470,6 +474,8 @@ function detectExistingApp(appName: string, resourceGroup: string): DetectedApp 
       targetPort: String(ingress?.targetPort ?? ''),
       minReplicas: String(scale?.minReplicas ?? '0'),
       maxReplicas: String(scale?.maxReplicas ?? '2'),
+      cpuCores: String(container?.resources?.cpu ?? '0.25'),
+      memory: container?.resources?.memory ?? '0.5Gi',
       fqdn: ingress?.fqdn ?? '',
       region: app.location ?? '',
       customDomains: (ingress?.customDomains ?? []).map((d: { name: string }) => d.name),
@@ -744,6 +750,8 @@ interface AppConfig {
   targetPort: string;
   minReplicas: string;
   maxReplicas: string;
+  cpuCores: string;
+  memory: string;
 }
 
 /**
@@ -791,8 +799,35 @@ async function configureApp(saved: Partial<Config>): Promise<AppConfig> {
     },
   });
 
+  // Azure Container Apps Consumption plan has fixed CPU/memory pairings
+  const resourceTiers = [
+    { cpu: '0.25', mem: '0.5Gi',  label: '0.25 vCPU / 0.5 Gi' },
+    { cpu: '0.5',  mem: '1.0Gi',  label: '0.5 vCPU / 1.0 Gi' },
+    { cpu: '0.75', mem: '1.5Gi',  label: '0.75 vCPU / 1.5 Gi' },
+    { cpu: '1.0',  mem: '2.0Gi',  label: '1.0 vCPU / 2.0 Gi' },
+    { cpu: '1.5',  mem: '3.0Gi',  label: '1.5 vCPU / 3.0 Gi' },
+    { cpu: '2.0',  mem: '4.0Gi',  label: '2.0 vCPU / 4.0 Gi' },
+  ];
+
+  const savedTier = resourceTiers.find(
+    (t) => t.cpu === saved.CPU_CORES && t.mem === saved.MEMORY
+  );
+
+  const tier = await select({
+    message: 'Resources per replica:',
+    choices: resourceTiers.map((t) => ({
+      name: t === savedTier ? `${t.label} ${pc.dim('(saved)')}` : t.label,
+      value: t,
+    })),
+    default: savedTier ?? resourceTiers[0],
+  });
+
   console.log();
-  return { appName: appName.trim(), resourceGroup: resourceGroup.trim(), targetPort, minReplicas, maxReplicas };
+  return {
+    appName: appName.trim(), resourceGroup: resourceGroup.trim(),
+    targetPort, minReplicas, maxReplicas,
+    cpuCores: tier.cpu, memory: tier.mem,
+  };
 }
 
 // ─── Custom domain configuration ─────────────────────────────────────────────
@@ -901,6 +936,8 @@ function printSummary(config: Config, detected?: DetectedApp | null): void {
     detectedValues['Target Port'] = detected.targetPort;
     detectedValues['Min Replicas'] = detected.minReplicas;
     detectedValues['Max Replicas'] = detected.maxReplicas;
+    detectedValues['CPU Cores'] = detected.cpuCores;
+    detectedValues['Memory'] = detected.memory;
     if (detected.customDomains.length > 0) {
       detectedValues['Custom Domain'] = detected.customDomains[0];
     }
@@ -916,6 +953,8 @@ function printSummary(config: Config, detected?: DetectedApp | null): void {
     ['Target Port', config.TARGET_PORT],
     ['Min Replicas', config.MIN_REPLICAS],
     ['Max Replicas', config.MAX_REPLICAS],
+    ['CPU Cores', config.CPU_CORES],
+    ['Memory', config.MEMORY],
   ];
 
   if (config.CUSTOM_DOMAIN) {
@@ -999,7 +1038,7 @@ async function deploy(config: Config): Promise<void> {
   console.log(pc.dim(`    • ${pc.white('Container App')}  → ${config.APP_NAME}`));
   console.log(pc.dim(`      Runs ${containerImage}`));
   console.log(pc.dim(`      HTTPS ingress on port ${config.TARGET_PORT}, ${config.MIN_REPLICAS}–${config.MAX_REPLICAS} replicas (HTTP auto-scale)`));
-  console.log(pc.dim(`      Resources: 0.25 vCPU, 0.5 Gi memory per replica\n`));
+  console.log(pc.dim(`      Resources: ${config.CPU_CORES} vCPU, ${config.MEMORY} memory per replica\n`));
 
   const deployOutput = await runWithSpinner(
     'Deploying infra/main.bicep',
@@ -1014,6 +1053,8 @@ async function deploy(config: Config): Promise<void> {
       `targetPort=${config.TARGET_PORT}`,
       `minReplicas=${config.MIN_REPLICAS}`,
       `maxReplicas=${config.MAX_REPLICAS}`,
+      `cpuCores="${config.CPU_CORES}"`,
+      `memory="${config.MEMORY}"`,
       `-o json`,
     ].join(' ')
   );
@@ -1363,6 +1404,8 @@ async function runPromptFlow(saved: Partial<Config>): Promise<Config> {
     TARGET_PORT: appConfig.targetPort,
     MIN_REPLICAS: appConfig.minReplicas,
     MAX_REPLICAS: appConfig.maxReplicas,
+    CPU_CORES: appConfig.cpuCores,
+    MEMORY: appConfig.memory,
     CUSTOM_DOMAIN: customDomain,
     CF_ZONE_ID: cfZoneId,
   };
@@ -1399,6 +1442,7 @@ async function main(): Promise<void> {
       console.log(pc.dim(`  Image:    ${detected.image}`));
       console.log(pc.dim(`  Port:     ${detected.targetPort}`));
       console.log(pc.dim(`  Replicas: ${detected.minReplicas}–${detected.maxReplicas}`));
+      console.log(pc.dim(`  Resources: ${detected.cpuCores} vCPU / ${detected.memory}`));
       if (detected.fqdn) console.log(pc.dim(`  FQDN:     ${detected.fqdn}`));
       if (detected.customDomains.length > 0) {
         console.log(pc.dim(`  Domains:  ${detected.customDomains.join(', ')}`));
@@ -1456,6 +1500,8 @@ async function main(): Promise<void> {
         TARGET_PORT: detected.targetPort || saved.TARGET_PORT || '3000',
         MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS || '0',
         MAX_REPLICAS: detected.maxReplicas || saved.MAX_REPLICAS || '2',
+        CPU_CORES: detected.cpuCores || saved.CPU_CORES || '0.25',
+        MEMORY: detected.memory || saved.MEMORY || '0.5Gi',
         CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN || '',
         CF_ZONE_ID: saved.CF_ZONE_ID || '',
       };
@@ -1471,6 +1517,8 @@ async function main(): Promise<void> {
         TARGET_PORT: detected.targetPort || saved.TARGET_PORT,
         MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS,
         MAX_REPLICAS: detected.maxReplicas || saved.MAX_REPLICAS,
+        CPU_CORES: detected.cpuCores || saved.CPU_CORES,
+        MEMORY: detected.memory || saved.MEMORY,
         CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN,
       };
 
