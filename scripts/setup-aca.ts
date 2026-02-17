@@ -285,8 +285,11 @@ async function selectGithubRepo(saved: Partial<Config>): Promise<[string, string
 async function selectImageTag(owner: string, repo: string, saved: Partial<Config>): Promise<string> {
   console.log(pc.bold('🏷️  Image Tag\n'));
 
+  // GHCR package names are always lowercase
+  const packageName = repo.toLowerCase();
+
   const versionsRaw = tryRun(
-    `gh api users/${owner}/packages/container/${repo}/versions --paginate 2>/dev/null`
+    `gh api "users/${owner}/packages/container/${packageName}/versions" --paginate 2>/dev/null`
   );
 
   let tags: string[] = [];
@@ -303,6 +306,7 @@ async function selectImageTag(owner: string, repo: string, saved: Partial<Config
 
   if (tags.length === 0) {
     console.log(pc.dim('  No published container images found. Using "latest".'));
+    console.log(pc.dim('  (If you have packages, run: gh auth refresh -s read:packages)'));
     console.log();
     return 'latest';
   }
