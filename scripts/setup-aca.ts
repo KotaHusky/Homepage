@@ -709,7 +709,7 @@ function resourceGroupExists(name: string): boolean {
  * 1. Registers required Azure resource providers
  * 2. Creates resource group if it doesn't exist
  * 3. Deploys `infra/main.bicep` with the collected parameters
- * 4. Optionally creates a service principal and sets the `AZURE_CREDENTIALS` GitHub secret
+ * 4. Optionally creates OIDC federated credentials and sets GitHub secrets
  *
  * @param config - The full deployment configuration.
  */
@@ -852,48 +852,190 @@ async function deploy(config: Config): Promise<void> {
     console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${config.CUSTOM_DOMAIN}`))}`);
   }
 
-  // Service principal + GitHub secret
-  const setupSp = await confirm({
-    message: 'Create service principal and set AZURE_CREDENTIALS GitHub secret?',
+  // OIDC federated credentials for GitHub Actions
+  const setupOidc = await confirm({
+    message: 'Set up OIDC credentials for GitHub Actions CI/CD?',
     default: true,
   });
 
-  if (setupSp) {
+  if (setupOidc) {
     const subscriptionId = run('az account show --query id -o tsv');
+    const tenantId = run('az account show --query tenantId -o tsv');
+    const spName = `github-actions-${config.APP_NAME}`;
+    const repoSlug = `${config.GITHUB_OWNER}/${config.GITHUB_REPO}`;
 
-    const spJson = await runWithSpinner(
-      'Creating service principal',
-      [
-        `az ad sp create-for-rbac`,
-        `--name "github-actions-${config.APP_NAME}"`,
-        `--role contributor`,
-        `--scopes /subscriptions/${subscriptionId}/resourceGroups/${config.RESOURCE_GROUP}`,
-        `--sdk-auth`,
-      ].join(' ')
+    // Create or reuse service principal (no client secret — OIDC only)
+    let clientId = tryRun(
+      `az ad sp list --display-name "${spName}" --query "[0].appId" -o tsv 2>/dev/null`
     );
 
-    // Pipe via stdin to avoid shell escaping issues with JSON
-    const spinner = createSpinner('Setting AZURE_CREDENTIALS secret').start();
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn(
-          'gh',
-          ['secret', 'set', 'AZURE_CREDENTIALS', '--repo', `${config.GITHUB_OWNER}/${config.GITHUB_REPO}`],
-          { stdio: ['pipe', 'pipe', 'pipe'] }
-        );
-        child.stdin.write(spJson);
-        child.stdin.end();
-        child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`gh secret set exited with code ${code}`))));
-        child.on('error', reject);
+    if (clientId) {
+      console.log(`  ${pc.green('✓')} Service principal ${pc.cyan(spName)} already exists`);
+    } else {
+      const spOutput = await runWithSpinner(
+        `Creating service principal ${spName}`,
+        `az ad sp create-for-rbac --name "${spName}" --role contributor --scopes /subscriptions/${subscriptionId}/resourceGroups/${config.RESOURCE_GROUP} --query appId -o tsv`
+      );
+      clientId = spOutput.trim();
+    }
+
+    // Add federated credential for main branch (idempotent — skip if exists)
+    const appObjectId = run(`az ad app list --display-name "${spName}" --query "[0].id" -o tsv`);
+    const fedCredName = `${config.GITHUB_REPO}-main`;
+    const existingFedCred = tryRun(
+      `az ad app federated-credential show --id "${appObjectId}" --federated-credential-id "${fedCredName}" 2>/dev/null`
+    );
+
+    if (existingFedCred) {
+      console.log(`  ${pc.green('✓')} Federated credential ${pc.cyan(fedCredName)} already exists`);
+    } else {
+      const fedCredBody = JSON.stringify({
+        name: fedCredName,
+        issuer: 'https://token.actions.githubusercontent.com',
+        subject: `repo:${repoSlug}:ref:refs/heads/main`,
+        audiences: ['api://AzureADTokenExchange'],
       });
-      spinner.success({ text: 'Setting AZURE_CREDENTIALS secret' });
-    } catch (err) {
-      spinner.error({ text: 'Setting AZURE_CREDENTIALS secret' });
-      throw err;
+
+      await runWithSpinner(
+        `Creating federated credential for ${repoSlug}:main`,
+        `az ad app federated-credential create --id "${appObjectId}" --parameters '${fedCredBody}'`
+      );
+    }
+
+    // Set GitHub secrets
+    const secrets: Array<[string, string]> = [
+      ['AZURE_CLIENT_ID', clientId!],
+      ['AZURE_TENANT_ID', tenantId],
+      ['AZURE_SUBSCRIPTION_ID', subscriptionId],
+    ];
+
+    for (const [name, value] of secrets) {
+      const secretSpinner = createSpinner(`Setting ${name} secret`).start();
+      try {
+        await new Promise<void>((resolvePromise, reject) => {
+          const child = spawn(
+            'gh',
+            ['secret', 'set', name, '--repo', repoSlug],
+            { stdio: ['pipe', 'pipe', 'pipe'] }
+          );
+          child.stdin.write(value);
+          child.stdin.end();
+          child.on('close', (code) => (code === 0 ? resolvePromise() : reject(new Error(`gh secret set exited with code ${code}`))));
+          child.on('error', reject);
+        });
+        secretSpinner.success({ text: `Setting ${name} secret` });
+      } catch (err) {
+        secretSpinner.error({ text: `Setting ${name} secret` });
+        throw err;
+      }
     }
   }
 
   console.log(pc.bold(pc.green('\n✅ Deployment complete!\n')));
+}
+
+// ─── Teardown ─────────────────────────────────────────────────────────────────
+
+/**
+ * Tears down the Azure deployment by deleting the resource group and
+ * optionally cleaning up the service principal and GitHub secrets.
+ * Requires saved config to know what to delete.
+ */
+async function teardown(): Promise<void> {
+  console.log(pc.bold(pc.red('\n🗑️  Teardown Mode\n')));
+
+  const saved = loadConfig();
+  if (!saved.APP_NAME || !saved.RESOURCE_GROUP) {
+    console.error(pc.red('  No saved configuration found. Nothing to tear down.'));
+    console.error(pc.dim(`  Expected config at ${CONFIG_FILE}`));
+    process.exit(1);
+  }
+
+  // Show what will be deleted
+  console.log(pc.dim('  This will permanently delete:\n'));
+  console.log(`    ${pc.red('•')} Resource group ${pc.cyan(saved.RESOURCE_GROUP)} and ${pc.white('all resources inside it')}`);
+  console.log(pc.dim('      (Container App, Container Apps Environment, Log Analytics Workspace)'));
+
+  const detected = detectExistingApp(saved.APP_NAME, saved.RESOURCE_GROUP);
+  if (detected) {
+    console.log(pc.dim(`      Running app: ${detected.image}`));
+    if (detected.fqdn) console.log(pc.dim(`      FQDN: ${detected.fqdn}`));
+    if (detected.customDomains.length > 0) {
+      console.log(pc.dim(`      Custom domains: ${detected.customDomains.join(', ')}`));
+    }
+  } else {
+    console.log(pc.dim('      (resource group may already be deleted or app not found)'));
+  }
+
+  console.log();
+
+  const confirmDelete = await confirm({
+    message: `Delete resource group "${saved.RESOURCE_GROUP}" and all its resources?`,
+    default: false,
+  });
+
+  if (!confirmDelete) {
+    console.log(pc.dim('\n  Teardown cancelled.\n'));
+    return;
+  }
+
+  // Double-confirm — this is destructive
+  const doubleConfirm = await input({
+    message: `Type "${saved.RESOURCE_GROUP}" to confirm deletion:`,
+    validate: (v) => v.trim() === saved.RESOURCE_GROUP || 'Name does not match',
+  });
+
+  if (doubleConfirm.trim() !== saved.RESOURCE_GROUP) {
+    console.log(pc.dim('\n  Teardown cancelled.\n'));
+    return;
+  }
+
+  // Delete resource group
+  await runWithSpinner(
+    `Deleting resource group ${saved.RESOURCE_GROUP}`,
+    `az group delete --name "${saved.RESOURCE_GROUP}" --yes --no-wait`
+  );
+  console.log(pc.dim('  Resource group deletion initiated (runs in background on Azure).\n'));
+
+  // Optionally clean up service principal
+  const spName = `github-actions-${saved.APP_NAME}`;
+  const spAppId = tryRun(
+    `az ad sp list --display-name "${spName}" --query "[0].appId" -o tsv 2>/dev/null`
+  );
+
+  if (spAppId) {
+    const cleanupSp = await confirm({
+      message: `Delete service principal "${spName}"?`,
+      default: true,
+    });
+
+    if (cleanupSp) {
+      await runWithSpinner(
+        `Deleting service principal ${spName}`,
+        `az ad app delete --id "${spAppId}"`
+      );
+    }
+  }
+
+  // Optionally clean up GitHub secrets
+  if (saved.GITHUB_OWNER && saved.GITHUB_REPO) {
+    const cleanupSecrets = await confirm({
+      message: 'Remove OIDC secrets from GitHub repo?',
+      default: true,
+    });
+
+    if (cleanupSecrets) {
+      const repoSlug = `${saved.GITHUB_OWNER}/${saved.GITHUB_REPO}`;
+      for (const secret of ['AZURE_CLIENT_ID', 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID']) {
+        const result = tryRun(`gh secret delete ${secret} --repo ${repoSlug} 2>/dev/null`);
+        if (result !== null) {
+          console.log(`  ${pc.green('✓')} Deleted ${secret}`);
+        }
+      }
+    }
+  }
+
+  console.log(pc.bold(pc.green('\n✅ Teardown complete!\n')));
 }
 
 // ─── Prompt flow ─────────────────────────────────────────────────────────────
@@ -1039,7 +1181,9 @@ async function main(): Promise<void> {
 
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
-main().catch((err) => {
+const entrypoint = process.argv.includes('--teardown') ? teardown : main;
+
+entrypoint().catch((err) => {
   // Handle Ctrl+C gracefully
   if (err instanceof Error && err.name === 'ExitPromptError') {
     console.log(pc.dim('\n  Cancelled.\n'));

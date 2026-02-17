@@ -12,7 +12,8 @@
     "start:docker-clean-build": "docker build -t homepage:latest .;docker run -p 3000:3000 homepage:latest",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup:aca": "tsx scripts/setup-aca.ts"
+    "setup:aca": "tsx scripts/setup-aca.ts",
+    "teardown:aca": "tsx scripts/setup-aca.ts --teardown"
   },
   "packageManager": "npm@9.6.7",
   "private": true,
