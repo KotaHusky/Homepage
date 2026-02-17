@@ -188,6 +188,60 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
   }
 }
 
+// ─── Azure detection ─────────────────────────────────────────────────────────
+
+/** Snapshot of an existing Azure Container App discovered via `az containerapp show`. */
+interface DetectedApp {
+  image: string;
+  targetPort: string;
+  minReplicas: string;
+  fqdn: string;
+  region: string;
+  customDomains: string[];
+}
+
+/**
+ * Queries Azure for a running container app and extracts its current settings.
+ * @param appName - The container app name.
+ * @param resourceGroup - The resource group name.
+ * @returns Detected app settings, or `null` if the app doesn't exist.
+ */
+function detectExistingApp(appName: string, resourceGroup: string): DetectedApp | null {
+  const raw = tryRun(
+    `az containerapp show --name "${appName}" -g "${resourceGroup}" -o json 2>/dev/null`
+  );
+  if (!raw) return null;
+
+  try {
+    const app = JSON.parse(raw);
+    const container = app.properties?.template?.containers?.[0];
+    const ingress = app.properties?.configuration?.ingress;
+    const scale = app.properties?.template?.scale;
+
+    return {
+      image: container?.image ?? '',
+      targetPort: String(ingress?.targetPort ?? ''),
+      minReplicas: String(scale?.minReplicas ?? '0'),
+      fqdn: ingress?.fqdn ?? '',
+      region: app.location ?? '',
+      customDomains: (ingress?.customDomains ?? []).map((d: { name: string }) => d.name),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Parses a GHCR image string into owner, repo, and tag.
+ * @param image - e.g. `"ghcr.io/kotahusky/homepage:latest"`
+ * @returns Parsed components, or `null` if the image doesn't match GHCR format.
+ */
+function parseGhcrImage(image: string): { owner: string; repo: string; tag: string } | null {
+  const match = image.match(/^ghcr\.io\/([^/]+)\/([^:]+):?(.*)$/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2], tag: match[3] || 'latest' };
+}
+
 // ─── Preflight ───────────────────────────────────────────────────────────────
 
 /**
@@ -585,10 +639,31 @@ async function configureCustomDomain(saved: Partial<Config>): Promise<[string, s
 
 /**
  * Displays a summary table of the deployment configuration.
+ * When a detected app is provided, values matching the live deployment are
+ * annotated with `(current)` and changed values with `(changed)`.
  * @param config - The full configuration to display.
+ * @param detected - Optional detected app for comparison indicators.
  */
-function printSummary(config: Config): void {
+function printSummary(config: Config, detected?: DetectedApp | null): void {
   console.log(pc.bold('\n📋 Deployment Summary\n'));
+
+  // Build a map of detected values for comparison
+  const detectedValues: Record<string, string> = {};
+  if (detected) {
+    const parsed = parseGhcrImage(detected.image);
+    if (parsed) {
+      detectedValues['GitHub Owner'] = parsed.owner;
+      detectedValues['Repository'] = parsed.repo;
+      detectedValues['Image Tag'] = parsed.tag;
+    }
+    detectedValues['Azure Region'] = detected.region;
+    detectedValues['Target Port'] = detected.targetPort;
+    detectedValues['Min Replicas'] = detected.minReplicas;
+    if (detected.customDomains.length > 0) {
+      detectedValues['Custom Domain'] = detected.customDomains[0];
+    }
+  }
+
   const entries: Array<[string, string]> = [
     ['GitHub Owner', config.GITHUB_OWNER],
     ['Repository', config.GITHUB_REPO],
@@ -606,7 +681,13 @@ function printSummary(config: Config): void {
 
   const maxLabel = Math.max(...entries.map(([l]) => l.length));
   for (const [label, value] of entries) {
-    console.log(`  ${pc.dim(label.padEnd(maxLabel))}  ${pc.cyan(value)}`);
+    let indicator = '';
+    if (detected && label in detectedValues) {
+      indicator = detectedValues[label] === value
+        ? pc.dim(' (current)')
+        : pc.yellow(' (changed)');
+    }
+    console.log(`  ${pc.dim(label.padEnd(maxLabel))}  ${pc.cyan(value)}${indicator}`);
   }
   console.log();
 }
@@ -635,13 +716,20 @@ function resourceGroupExists(name: string): boolean {
 async function deploy(config: Config): Promise<void> {
   console.log(pc.bold('\n🚀 Deploying\n'));
 
-  // Register resource providers
-  console.log(pc.dim('  Registering Azure resource providers required for Container Apps...\n'));
+  // Register resource providers (skip if already registered)
+  console.log(pc.dim('  Checking Azure resource providers required for Container Apps...\n'));
   for (const provider of REQUIRED_PROVIDERS) {
-    await runWithSpinner(
-      `Registering ${provider}`,
-      `az provider register --namespace ${provider} --wait`
+    const state = tryRun(
+      `az provider show --namespace ${provider} -o tsv --query registrationState 2>/dev/null`
     );
+    if (state === 'Registered') {
+      console.log(`  ${pc.green('✓')} ${provider} already registered`);
+    } else {
+      await runWithSpinner(
+        `Registering ${provider}`,
+        `az provider register --namespace ${provider} --wait`
+      );
+    }
   }
   console.log();
 
@@ -708,31 +796,56 @@ async function deploy(config: Config): Promise<void> {
   if (config.CUSTOM_DOMAIN && config.CF_ZONE_ID && fqdn) {
     console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
 
-    // Step A — Cloudflare CNAME
+    // Step A — Cloudflare CNAME (skip if it already points to the right FQDN)
     const subdomain = config.CUSTOM_DOMAIN.split('.').slice(0, -2).join('.') || '@';
+    let cnameExists = false;
     try {
-      await runWithSpinner(
-        `Creating CNAME ${config.CUSTOM_DOMAIN} → ${fqdn}`,
-        `wrangler dns record create ${config.CF_ZONE_ID} --type CNAME --name "${subdomain}" --content "${fqdn}" --proxied true`
+      const recordsRaw = tryRun(
+        `wrangler dns record list ${config.CF_ZONE_ID} --name "${subdomain}" --json 2>/dev/null`
       );
+      if (recordsRaw) {
+        const records = JSON.parse(recordsRaw);
+        cnameExists = records.some(
+          (r: { type: string; content: string }) => r.type === 'CNAME' && r.content === fqdn
+        );
+      }
     } catch {
-      // Record may already exist — try update approach
-      console.log(pc.dim('  CNAME may already exist, continuing...'));
+      // list failed — proceed to create
     }
 
-    // Step B — ACA custom domain binding
-    try {
-      await runWithSpinner(
-        `Adding hostname ${config.CUSTOM_DOMAIN} to container app`,
-        `az containerapp hostname add --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}"`
-      );
-      await runWithSpinner(
-        `Binding TLS certificate for ${config.CUSTOM_DOMAIN}`,
-        `az containerapp hostname bind --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}" --environment "${config.APP_NAME}-env" --validation-method CNAME`
-      );
-    } catch (err) {
-      console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
-      console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
+    if (cnameExists) {
+      console.log(`  ${pc.green('✓')} CNAME already exists: ${config.CUSTOM_DOMAIN} → ${fqdn}`);
+    } else {
+      try {
+        await runWithSpinner(
+          `Creating CNAME ${config.CUSTOM_DOMAIN} → ${fqdn}`,
+          `wrangler dns record create ${config.CF_ZONE_ID} --type CNAME --name "${subdomain}" --content "${fqdn}" --proxied true`
+        );
+      } catch {
+        console.log(pc.dim('  CNAME may already exist, continuing...'));
+      }
+    }
+
+    // Step B — ACA custom domain binding (skip if already bound)
+    const detectedForDeploy = detectExistingApp(config.APP_NAME, config.RESOURCE_GROUP);
+    const domainAlreadyBound = detectedForDeploy?.customDomains.includes(config.CUSTOM_DOMAIN) ?? false;
+
+    if (domainAlreadyBound) {
+      console.log(`  ${pc.green('✓')} Custom domain already bound: ${config.CUSTOM_DOMAIN}`);
+    } else {
+      try {
+        await runWithSpinner(
+          `Adding hostname ${config.CUSTOM_DOMAIN} to container app`,
+          `az containerapp hostname add --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}"`
+        );
+        await runWithSpinner(
+          `Binding TLS certificate for ${config.CUSTOM_DOMAIN}`,
+          `az containerapp hostname bind --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}" --environment "${config.APP_NAME}-env" --validation-method CNAME`
+        );
+      } catch (err) {
+        console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
+      }
     }
 
     // Step C — Print custom URL
@@ -783,6 +896,41 @@ async function deploy(config: Config): Promise<void> {
   console.log(pc.bold(pc.green('\n✅ Deployment complete!\n')));
 }
 
+// ─── Prompt flow ─────────────────────────────────────────────────────────────
+
+/**
+ * Runs the full interactive prompt flow (repo, tag, region, app config, domain).
+ * Extracted so it can be called from the detection-skip or normal path.
+ * @param saved - Saved/merged config values to use as defaults.
+ * @param wranglerAvailable - Whether the Cloudflare Wrangler CLI is available.
+ * @returns The full collected {@link Config}.
+ */
+async function runPromptFlow(saved: Partial<Config>, wranglerAvailable: boolean): Promise<Config> {
+  const [owner, repo] = await selectGithubRepo(saved);
+  const imageTag = await selectImageTag(owner, repo, saved);
+  const azureRegion = await selectAzureRegion(saved);
+  const appConfig = await configureApp(saved);
+
+  let customDomain = '';
+  let cfZoneId = '';
+  if (wranglerAvailable) {
+    [customDomain, cfZoneId] = await configureCustomDomain(saved);
+  }
+
+  return {
+    GITHUB_OWNER: owner,
+    GITHUB_REPO: repo,
+    IMAGE_TAG: imageTag,
+    AZURE_REGION: azureRegion,
+    APP_NAME: appConfig.appName,
+    RESOURCE_GROUP: appConfig.resourceGroup,
+    TARGET_PORT: appConfig.targetPort,
+    MIN_REPLICAS: appConfig.minReplicas,
+    CUSTOM_DOMAIN: customDomain,
+    CF_ZONE_ID: cfZoneId,
+  };
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 /**
@@ -804,45 +952,76 @@ async function main(): Promise<void> {
   // Step 1: Preflight
   const wranglerAvailable = preflight();
 
-  // Step 2: GitHub repo
-  const [owner, repo] = await selectGithubRepo(saved);
-
-  // Step 3: Image tag
-  const imageTag = await selectImageTag(owner, repo, saved);
-
-  // Step 4: Azure region
-  const azureRegion = await selectAzureRegion(saved);
-
-  // Step 5: App configuration
-  const appConfig = await configureApp(saved);
-
-  // Step 6: Custom domain (optional, requires wrangler)
-  let customDomain = '';
-  let cfZoneId = '';
-  if (wranglerAvailable) {
-    [customDomain, cfZoneId] = await configureCustomDomain(saved);
+  // Step 2: Detect existing deployment
+  let detected: DetectedApp | null = null;
+  if (saved.APP_NAME && saved.RESOURCE_GROUP) {
+    const spinner = createSpinner('Detecting existing deployment...').start();
+    detected = detectExistingApp(saved.APP_NAME, saved.RESOURCE_GROUP);
+    if (detected) {
+      spinner.success({ text: `Found container app ${pc.cyan(saved.APP_NAME)} in rg ${pc.cyan(saved.RESOURCE_GROUP)} (${detected.region})` });
+      console.log(pc.dim(`  Image:    ${detected.image}`));
+      console.log(pc.dim(`  Port:     ${detected.targetPort}`));
+      console.log(pc.dim(`  Replicas: ${detected.minReplicas}–10`));
+      if (detected.fqdn) console.log(pc.dim(`  FQDN:     ${detected.fqdn}`));
+      if (detected.customDomains.length > 0) {
+        console.log(pc.dim(`  Domains:  ${detected.customDomains.join(', ')}`));
+      }
+      console.log();
+    } else {
+      spinner.warn({ text: `No existing app found for ${saved.APP_NAME} in ${saved.RESOURCE_GROUP}` });
+      console.log();
+    }
   }
 
-  // Build full config
-  const config: Config = {
-    GITHUB_OWNER: owner,
-    GITHUB_REPO: repo,
-    IMAGE_TAG: imageTag,
-    AZURE_REGION: azureRegion,
-    APP_NAME: appConfig.appName,
-    RESOURCE_GROUP: appConfig.resourceGroup,
-    TARGET_PORT: appConfig.targetPort,
-    MIN_REPLICAS: appConfig.minReplicas,
-    CUSTOM_DOMAIN: customDomain,
-    CF_ZONE_ID: cfZoneId,
-  };
+  let config: Config;
 
-  // Step 7: Save config
+  if (detected) {
+    const reuseExisting = await confirm({
+      message: 'Use existing deployment settings?',
+      default: true,
+    });
+
+    if (reuseExisting) {
+      // Auto-populate config from detected values
+      const parsed = parseGhcrImage(detected.image);
+      config = {
+        GITHUB_OWNER: parsed?.owner ?? saved.GITHUB_OWNER ?? '',
+        GITHUB_REPO: parsed?.repo ?? saved.GITHUB_REPO ?? '',
+        IMAGE_TAG: parsed?.tag ?? saved.IMAGE_TAG ?? 'latest',
+        AZURE_REGION: detected.region || saved.AZURE_REGION || '',
+        APP_NAME: saved.APP_NAME!,
+        RESOURCE_GROUP: saved.RESOURCE_GROUP!,
+        TARGET_PORT: detected.targetPort || saved.TARGET_PORT || '3000',
+        MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS || '0',
+        CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN || '',
+        CF_ZONE_ID: saved.CF_ZONE_ID || '',
+      };
+    } else {
+      // Fall through to prompts, but merge detected values as defaults
+      const parsed = parseGhcrImage(detected.image);
+      const mergedSaved: Partial<Config> = {
+        ...saved,
+        GITHUB_OWNER: parsed?.owner ?? saved.GITHUB_OWNER,
+        GITHUB_REPO: parsed?.repo ?? saved.GITHUB_REPO,
+        IMAGE_TAG: parsed?.tag ?? saved.IMAGE_TAG,
+        AZURE_REGION: detected.region || saved.AZURE_REGION,
+        TARGET_PORT: detected.targetPort || saved.TARGET_PORT,
+        MIN_REPLICAS: detected.minReplicas || saved.MIN_REPLICAS,
+        CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN,
+      };
+
+      config = await runPromptFlow(mergedSaved, wranglerAvailable);
+    }
+  } else {
+    config = await runPromptFlow(saved, wranglerAvailable);
+  }
+
+  // Save config
   saveConfig(config);
   console.log(pc.dim(`  Config saved to ${CONFIG_FILE}\n`));
 
-  // Step 8: Summary + confirm
-  printSummary(config);
+  // Summary + confirm
+  printSummary(config, detected);
 
   const proceed = await confirm({
     message: 'Deploy now?',
