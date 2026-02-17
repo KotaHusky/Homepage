@@ -40,6 +40,8 @@ interface Config {
   RESOURCE_GROUP: string;
   TARGET_PORT: string;
   MIN_REPLICAS: string;
+  CUSTOM_DOMAIN: string;
+  CF_ZONE_ID: string;
 }
 
 /** An Azure region returned by `az account list-locations`. */
@@ -122,6 +124,7 @@ function isConfigKey(key: string): key is keyof Config {
   const validKeys: Array<keyof Config> = [
     'GITHUB_OWNER', 'GITHUB_REPO', 'IMAGE_TAG', 'AZURE_REGION',
     'APP_NAME', 'RESOURCE_GROUP', 'TARGET_PORT', 'MIN_REPLICAS',
+    'CUSTOM_DOMAIN', 'CF_ZONE_ID',
   ];
   return validKeys.includes(key as keyof Config);
 }
@@ -190,8 +193,9 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
 /**
  * Verifies that all required CLI tools are installed and authenticated.
  * Exits the process with code 1 if any check fails.
+ * @returns Whether the Cloudflare `wrangler` CLI is available and authenticated.
  */
-function preflight(): void {
+function preflight(): boolean {
   console.log(pc.bold('\n🔍 Preflight checks\n'));
 
   // Check az CLI
@@ -228,6 +232,23 @@ function preflight(): void {
   }
   console.log(pc.green('✓') + ` GitHub user: ${pc.cyan(ghUser)}`);
 
+  // Check wrangler CLI (optional — DNS step requires it)
+  let wranglerAvailable = false;
+  const wranglerVersion = tryRun('wrangler --version 2>/dev/null');
+  if (!wranglerVersion) {
+    console.log(pc.yellow('⚠') + ' Cloudflare Wrangler not found (custom domain step will be skipped)');
+    console.log(pc.dim('  Install: brew install cloudflare-wrangler2'));
+  } else {
+    const wranglerUser = tryRun('wrangler whoami 2>/dev/null');
+    if (!wranglerUser || wranglerUser.includes('Not authenticated')) {
+      console.log(pc.yellow('⚠') + ' Wrangler found but not authenticated (custom domain step will be skipped)');
+      console.log(pc.dim('  Run: wrangler login'));
+    } else {
+      wranglerAvailable = true;
+      console.log(pc.green('✓') + ' Cloudflare Wrangler authenticated');
+    }
+  }
+
   // Check bicep file
   if (!existsSync(BICEP_FILE)) {
     console.error(pc.red(`✗ Bicep file not found: ${BICEP_FILE}`));
@@ -237,6 +258,7 @@ function preflight(): void {
   console.log(pc.green('✓') + ' infra/main.bicep found');
 
   console.log();
+  return wranglerAvailable;
 }
 
 // ─── GitHub repo selection ───────────────────────────────────────────────────
@@ -478,6 +500,87 @@ async function configureApp(saved: Partial<Config>): Promise<AppConfig> {
   return { appName: appName.trim(), resourceGroup: resourceGroup.trim(), targetPort, minReplicas };
 }
 
+// ─── Custom domain configuration ─────────────────────────────────────────────
+
+/** Cloudflare zone returned by the zones API. */
+interface CfZone {
+  id: string;
+  name: string;
+}
+
+/**
+ * Extracts the root domain (last two segments) from a hostname.
+ * @param hostname - e.g. `"homepage.kotahusky.dev"`
+ * @returns e.g. `"kotahusky.dev"`
+ */
+function rootDomain(hostname: string): string {
+  const parts = hostname.split('.');
+  return parts.slice(-2).join('.');
+}
+
+/**
+ * Prompts the user to configure a custom domain via Cloudflare DNS.
+ * Resolves the Cloudflare zone ID automatically from the domain name.
+ * @param saved - Previously saved config values for defaults.
+ * @returns Tuple of `[customDomain, cfZoneId]`, or `['', '']` if skipped.
+ */
+async function configureCustomDomain(saved: Partial<Config>): Promise<[string, string]> {
+  console.log(pc.bold('🌐 Custom Domain\n'));
+
+  const wantsDomain = await confirm({
+    message: 'Configure custom domain via Cloudflare?',
+    default: !!saved.CUSTOM_DOMAIN,
+  });
+
+  if (!wantsDomain) {
+    console.log();
+    return ['', ''];
+  }
+
+  const hostname = await input({
+    message: 'Full hostname (e.g. homepage.kotahusky.dev):',
+    default: saved.CUSTOM_DOMAIN,
+    validate: (v) => {
+      const trimmed = v.trim();
+      if (!trimmed) return 'Hostname is required';
+      if (trimmed.split('.').length < 2) return 'Enter a fully qualified domain name';
+      return true;
+    },
+  });
+
+  const domain = rootDomain(hostname.trim());
+
+  // Try to auto-resolve zone ID via Cloudflare API
+  let zoneId = '';
+  const spinner = createSpinner(`Resolving Cloudflare zone for ${domain}`).start();
+  try {
+    const zonesRaw = run(
+      `wrangler dns list-zones --search "${domain}" --json 2>/dev/null`
+    );
+    const zones: CfZone[] = JSON.parse(zonesRaw);
+    const match = zones.find((z) => z.name === domain);
+    if (match) {
+      zoneId = match.id;
+      spinner.success({ text: `Zone found: ${pc.cyan(domain)} (${pc.dim(zoneId)})` });
+    } else {
+      spinner.warn({ text: `Could not auto-resolve zone for ${domain}` });
+    }
+  } catch {
+    spinner.warn({ text: `Could not auto-resolve zone for ${domain}` });
+  }
+
+  if (!zoneId) {
+    zoneId = await input({
+      message: 'Cloudflare Zone ID (find in dashboard → Overview):',
+      default: saved.CF_ZONE_ID,
+      validate: (v) => v.trim().length > 0 || 'Zone ID is required',
+    });
+  }
+
+  console.log();
+  return [hostname.trim(), zoneId.trim()];
+}
+
 // ─── Summary ─────────────────────────────────────────────────────────────────
 
 /**
@@ -496,6 +599,10 @@ function printSummary(config: Config): void {
     ['Target Port', config.TARGET_PORT],
     ['Min Replicas', config.MIN_REPLICAS],
   ];
+
+  if (config.CUSTOM_DOMAIN) {
+    entries.push(['Custom Domain', config.CUSTOM_DOMAIN]);
+  }
 
   const maxLabel = Math.max(...entries.map(([l]) => l.length));
   for (const [label, value] of entries) {
@@ -580,17 +687,56 @@ async function deploy(config: Config): Promise<void> {
   );
 
   // Show deployment outputs (FQDN + URL)
+  let fqdn = '';
   try {
     const result = JSON.parse(deployOutput);
     const outputs = result?.properties?.outputs;
-    if (outputs?.url?.value) {
-      console.log(`\n  ${pc.green('→')} App URL: ${pc.cyan(pc.bold(outputs.url.value))}`);
-    }
     if (outputs?.fqdn?.value) {
-      console.log(`  ${pc.green('→')} FQDN:    ${pc.cyan(outputs.fqdn.value)}`);
+      fqdn = outputs.fqdn.value;
+    }
+    if (outputs?.url?.value) {
+      console.log(`\n  ${pc.green('→')} App URL:    ${pc.cyan(pc.bold(outputs.url.value))}`);
+    }
+    if (fqdn) {
+      console.log(`  ${pc.green('→')} FQDN:       ${pc.cyan(fqdn)}`);
     }
   } catch {
     // output parsing failed — non-critical
+  }
+
+  // Custom domain: Cloudflare CNAME + ACA binding
+  if (config.CUSTOM_DOMAIN && config.CF_ZONE_ID && fqdn) {
+    console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
+
+    // Step A — Cloudflare CNAME
+    const subdomain = config.CUSTOM_DOMAIN.split('.').slice(0, -2).join('.') || '@';
+    try {
+      await runWithSpinner(
+        `Creating CNAME ${config.CUSTOM_DOMAIN} → ${fqdn}`,
+        `wrangler dns record create ${config.CF_ZONE_ID} --type CNAME --name "${subdomain}" --content "${fqdn}" --proxied true`
+      );
+    } catch {
+      // Record may already exist — try update approach
+      console.log(pc.dim('  CNAME may already exist, continuing...'));
+    }
+
+    // Step B — ACA custom domain binding
+    try {
+      await runWithSpinner(
+        `Adding hostname ${config.CUSTOM_DOMAIN} to container app`,
+        `az containerapp hostname add --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}"`
+      );
+      await runWithSpinner(
+        `Binding TLS certificate for ${config.CUSTOM_DOMAIN}`,
+        `az containerapp hostname bind --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}" --environment "${config.APP_NAME}-env" --validation-method CNAME`
+      );
+    } catch (err) {
+      console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
+    }
+
+    // Step C — Print custom URL
+    console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${config.CUSTOM_DOMAIN}`))}`);
   }
 
   // Service principal + GitHub secret
@@ -656,7 +802,7 @@ async function main(): Promise<void> {
   }
 
   // Step 1: Preflight
-  preflight();
+  const wranglerAvailable = preflight();
 
   // Step 2: GitHub repo
   const [owner, repo] = await selectGithubRepo(saved);
@@ -670,6 +816,13 @@ async function main(): Promise<void> {
   // Step 5: App configuration
   const appConfig = await configureApp(saved);
 
+  // Step 6: Custom domain (optional, requires wrangler)
+  let customDomain = '';
+  let cfZoneId = '';
+  if (wranglerAvailable) {
+    [customDomain, cfZoneId] = await configureCustomDomain(saved);
+  }
+
   // Build full config
   const config: Config = {
     GITHUB_OWNER: owner,
@@ -680,13 +833,15 @@ async function main(): Promise<void> {
     RESOURCE_GROUP: appConfig.resourceGroup,
     TARGET_PORT: appConfig.targetPort,
     MIN_REPLICAS: appConfig.minReplicas,
+    CUSTOM_DOMAIN: customDomain,
+    CF_ZONE_ID: cfZoneId,
   };
 
-  // Step 6: Save config
+  // Step 7: Save config
   saveConfig(config);
   console.log(pc.dim(`  Config saved to ${CONFIG_FILE}\n`));
 
-  // Step 7: Summary + confirm
+  // Step 8: Summary + confirm
   printSummary(config);
 
   const proceed = await confirm({
@@ -699,7 +854,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Step 8: Deploy
+  // Step 9: Deploy
   await deploy(config);
 }
 
