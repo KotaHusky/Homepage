@@ -529,15 +529,19 @@ async function deploy(config: Config): Promise<void> {
   console.log(pc.bold('\n🚀 Deploying\n'));
 
   // Register resource providers
+  console.log(pc.dim('  Registering Azure resource providers required for Container Apps...\n'));
   for (const provider of REQUIRED_PROVIDERS) {
     await runWithSpinner(
       `Registering ${provider}`,
       `az provider register --namespace ${provider} --wait`
     );
   }
+  console.log();
 
   // Create resource group if needed
   if (!resourceGroupExists(config.RESOURCE_GROUP)) {
+    console.log(pc.dim(`  Creating resource group "${config.RESOURCE_GROUP}" in ${config.AZURE_REGION}...`));
+    console.log(pc.dim('  This is the container for all deployed Azure resources.\n'));
     await runWithSpinner(
       `Creating resource group ${config.RESOURCE_GROUP}`,
       `az group create --name "${config.RESOURCE_GROUP}" --location "${config.AZURE_REGION}" -o none`
@@ -545,9 +549,21 @@ async function deploy(config: Config): Promise<void> {
   } else {
     console.log(pc.green('✓') + ` Resource group ${pc.cyan(config.RESOURCE_GROUP)} exists`);
   }
+  console.log();
 
   // Deploy Bicep
-  await runWithSpinner(
+  console.log(pc.dim('  Deploying infra/main.bicep — this creates or updates:\n'));
+  console.log(pc.dim(`    • ${pc.white('Log Analytics Workspace')}  → ${config.APP_NAME}-logs`));
+  console.log(pc.dim(`      Collects container logs and metrics (PerGB2018 SKU, 30-day retention)`));
+  console.log(pc.dim(`    • ${pc.white('Container Apps Environment')}  → ${config.APP_NAME}-env`));
+  console.log(pc.dim(`      Managed hosting environment connected to Log Analytics`));
+  const containerImage = `ghcr.io/${config.GITHUB_OWNER}/${config.GITHUB_REPO}:${config.IMAGE_TAG}`.toLowerCase();
+  console.log(pc.dim(`    • ${pc.white('Container App')}  → ${config.APP_NAME}`));
+  console.log(pc.dim(`      Runs ${containerImage}`));
+  console.log(pc.dim(`      HTTPS ingress on port ${config.TARGET_PORT}, ${config.MIN_REPLICAS}–10 replicas (HTTP auto-scale)`));
+  console.log(pc.dim(`      Resources: 0.25 vCPU, 0.5 Gi memory per replica\n`));
+
+  const deployOutput = await runWithSpinner(
     'Deploying infra/main.bicep',
     [
       `az deployment group create`,
@@ -556,12 +572,26 @@ async function deploy(config: Config): Promise<void> {
       `--parameters`,
       `appName="${config.APP_NAME}"`,
       `location="${config.AZURE_REGION}"`,
-      `containerImage="ghcr.io/${config.GITHUB_OWNER}/${config.GITHUB_REPO}:${config.IMAGE_TAG}"`,
+      `containerImage="${containerImage}"`,
       `targetPort=${config.TARGET_PORT}`,
       `minReplicas=${config.MIN_REPLICAS}`,
-      `-o none`,
+      `-o json`,
     ].join(' ')
   );
+
+  // Show deployment outputs (FQDN + URL)
+  try {
+    const result = JSON.parse(deployOutput);
+    const outputs = result?.properties?.outputs;
+    if (outputs?.url?.value) {
+      console.log(`\n  ${pc.green('→')} App URL: ${pc.cyan(pc.bold(outputs.url.value))}`);
+    }
+    if (outputs?.fqdn?.value) {
+      console.log(`  ${pc.green('→')} FQDN:    ${pc.cyan(outputs.fqdn.value)}`);
+    }
+  } catch {
+    // output parsing failed — non-critical
+  }
 
   // Service principal + GitHub secret
   const setupSp = await confirm({
