@@ -1137,12 +1137,22 @@ async function main(): Promise<void> {
   let config: Config;
 
   if (detected) {
-    const reuseExisting = await confirm({
-      message: 'Use existing deployment settings?',
-      default: true,
+    const action = await select<'redeploy' | 'update' | 'delete'>({
+      message: 'Existing deployment found. What would you like to do?',
+      choices: [
+        { name: `Redeploy with current settings`, value: 'redeploy' as const },
+        { name: `Update settings`, value: 'update' as const },
+        { name: pc.red('Delete stack'), value: 'delete' as const },
+      ],
     });
+    console.log();
 
-    if (reuseExisting) {
+    if (action === 'delete') {
+      await teardown();
+      return;
+    }
+
+    if (action === 'redeploy') {
       // Auto-populate config from detected values
       const parsed = parseGhcrImage(detected.image);
       config = {
