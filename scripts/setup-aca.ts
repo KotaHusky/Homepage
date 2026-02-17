@@ -191,37 +191,62 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
 
 // ─── Cloudflare API helpers ──────────────────────────────────────────────────
 
-/**
- * Resolves the Cloudflare API token from environment or wrangler config.
- * Checks CLOUDFLARE_API_TOKEN env var first, then wrangler's stored OAuth token.
- * @returns The API token, or `null` if not found.
- */
-function resolveCfApiToken(): string | null {
-  // 1. Environment variable (highest priority)
-  if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
+/** Cloudflare API token, acquired from env var or user prompt when needed. */
+let cfApiToken: string | null = null;
 
-  // 2. Wrangler's stored OAuth token — search known config locations
-  const home = process.env.HOME ?? '';
-  const configPaths = [
-    // macOS: ~/Library/Preferences/.wrangler/config/default.toml
-    resolve(home, 'Library/Preferences/.wrangler/config/default.toml'),
-    // Linux/fallback: ~/.wrangler/config/default.toml
-    resolve(home, '.wrangler/config/default.toml'),
-    // XDG config
-    resolve(process.env.XDG_CONFIG_HOME ?? resolve(home, '.config'), 'wrangler/config/default.toml'),
-  ];
-  for (const p of configPaths) {
-    if (!existsSync(p)) continue;
-    const content = readFileSync(p, 'utf-8');
-    const match = content.match(/oauth_token\s*=\s*"([^"]+)"/);
-    if (match) return match[1];
+/**
+ * Ensures the Cloudflare API token is available. Checks:
+ * 1. Already resolved (previous call)
+ * 2. CLOUDFLARE_API_TOKEN environment variable
+ * 3. Prompts the user interactively
+ *
+ * Verifies the token works before returning.
+ * @param repoSlug - GitHub owner/repo for checking existing secrets.
+ * @returns The validated API token.
+ */
+async function ensureCfApiToken(repoSlug: string): Promise<string> {
+  // Already have a validated token
+  if (cfApiToken) return cfApiToken;
+
+  // Try environment variable
+  let token = process.env.CLOUDFLARE_API_TOKEN ?? '';
+
+  if (!token) {
+    // Check if the secret exists in GitHub (can't read value, but can check existence)
+    const secretExists = tryRun(
+      `gh secret list --repo ${repoSlug} --json name --jq '.[].name' 2>/dev/null`
+    )?.split('\n').includes('CLOUDFLARE_API_TOKEN') ?? false;
+
+    if (secretExists) {
+      console.log(pc.dim('  CLOUDFLARE_API_TOKEN is set as a GitHub secret but not available locally.\n'));
+    }
+
+    console.log(pc.dim('  A Cloudflare API token with Zone:DNS:Edit permission is required.'));
+    console.log(pc.dim('  Create one at: https://dash.cloudflare.com/profile/api-tokens\n'));
+
+    token = await input({
+      message: 'Cloudflare API token:',
+      validate: (v) => v.trim().length > 0 || 'Token is required',
+    });
+    token = token.trim();
   }
 
-  return null;
-}
+  // Verify the token works
+  const spinner = createSpinner('Verifying Cloudflare API token...').start();
+  try {
+    execSync(
+      `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer $CF_TOKEN"`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: token } }
+    );
+    spinner.success({ text: 'Cloudflare API token verified' });
+  } catch {
+    spinner.error({ text: 'Cloudflare API token is invalid' });
+    throw new Error('Invalid Cloudflare API token. Create one at https://dash.cloudflare.com/profile/api-tokens with Zone:DNS:Edit permission.');
+  }
 
-/** Stored Cloudflare API token, resolved once during preflight. */
-let cfApiToken: string | null = null;
+  cfApiToken = token;
+  return token;
+}
 
 /**
  * Calls the Cloudflare API. Uses environment variable for the token to avoid
@@ -417,9 +442,8 @@ function parseGhcrImage(image: string): { owner: string; repo: string; tag: stri
 /**
  * Verifies that all required CLI tools are installed and authenticated.
  * Exits the process with code 1 if any check fails.
- * @returns Whether the Cloudflare `wrangler` CLI is available and authenticated.
  */
-function preflight(): boolean {
+function preflight(): void {
   console.log(pc.bold('\n🔍 Preflight checks\n'));
 
   // Check az CLI
@@ -456,49 +480,6 @@ function preflight(): boolean {
   }
   console.log(pc.green('✓') + ` GitHub user: ${pc.cyan(ghUser)}`);
 
-  // Check Cloudflare API access (optional — DNS step requires it)
-  // A dedicated API token with Zone:DNS:Edit is required for DNS management.
-  // The wrangler OAuth token only has zone:read and cannot create/update records.
-  let wranglerAvailable = false;
-  cfApiToken = resolveCfApiToken();
-  if (!cfApiToken) {
-    console.log(pc.yellow('⚠') + ' Cloudflare API token not found (custom domain step will be skipped)');
-    console.log(pc.dim('  Create an API token at https://dash.cloudflare.com/profile/api-tokens'));
-    console.log(pc.dim('  Required permissions: Zone:DNS:Edit'));
-    console.log(pc.dim('  Then: export CLOUDFLARE_API_TOKEN="your-token"'));
-  } else {
-    // Verify the token works and has DNS write access by listing zones
-    let verifyResult: string | null = null;
-    try {
-      verifyResult = execSync(
-        `curl -sf "https://api.cloudflare.com/client/v4/user" -H "Authorization: Bearer $CF_TOKEN"`,
-        { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: cfApiToken } }
-      ).trim() || null;
-    } catch {
-      verifyResult = null;
-    }
-    if (verifyResult) {
-      // Check if this is the wrangler OAuth token (lacks DNS write) vs a proper API token
-      const isFromEnv = !!process.env.CLOUDFLARE_API_TOKEN;
-      if (isFromEnv) {
-        wranglerAvailable = true;
-        console.log(pc.green('✓') + ' Cloudflare API authenticated (CLOUDFLARE_API_TOKEN)');
-      } else {
-        // Wrangler OAuth token — verify DNS write by doing a dry-run style check
-        // Try to list DNS records for a test — if zones work, the token is valid but may lack DNS write
-        wranglerAvailable = true;
-        console.log(pc.green('✓') + ' Cloudflare API authenticated (wrangler OAuth)');
-        console.log(pc.dim('  ⚠ If DNS creation fails with 403, create a dedicated API token:'));
-        console.log(pc.dim('    https://dash.cloudflare.com/profile/api-tokens → Zone:DNS:Edit'));
-        console.log(pc.dim('    Then: export CLOUDFLARE_API_TOKEN="your-token"'));
-      }
-    } else {
-      cfApiToken = null;
-      console.log(pc.yellow('⚠') + ' Cloudflare API token is invalid (custom domain step will be skipped)');
-      console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
-    }
-  }
-
   // Check bicep file
   if (!existsSync(BICEP_FILE)) {
     console.error(pc.red(`✗ Bicep file not found: ${BICEP_FILE}`));
@@ -508,7 +489,6 @@ function preflight(): boolean {
   console.log(pc.green('✓') + ' infra/main.bicep found');
 
   console.log();
-  return wranglerAvailable;
 }
 
 // ─── GitHub repo selection ───────────────────────────────────────────────────
@@ -786,7 +766,7 @@ function rootDomain(hostname: string): string {
  * @param saved - Previously saved config values for defaults.
  * @returns Tuple of `[customDomain, cfZoneId]`, or `['', '']` if skipped.
  */
-async function configureCustomDomain(saved: Partial<Config>): Promise<[string, string]> {
+async function configureCustomDomain(saved: Partial<Config>, repoSlug: string): Promise<[string, string]> {
   console.log(pc.bold('🌐 Custom Domain\n'));
 
   const wantsDomain = await confirm({
@@ -811,6 +791,9 @@ async function configureCustomDomain(saved: Partial<Config>): Promise<[string, s
   });
 
   const domain = rootDomain(hostname.trim());
+
+  // Ensure we have a CF token before looking up the zone
+  await ensureCfApiToken(repoSlug);
 
   // Try to auto-resolve zone ID via Cloudflare API
   let zoneId = '';
@@ -1002,7 +985,8 @@ async function deploy(config: Config): Promise<void> {
 
   // Custom domain: Cloudflare DNS records + ACA binding
   if (config.CUSTOM_DOMAIN && config.CF_ZONE_ID && fqdn) {
-    await configureDns(config.CUSTOM_DOMAIN, config.CF_ZONE_ID, fqdn, config.APP_NAME, config.RESOURCE_GROUP);
+    const repoSlug = `${config.GITHUB_OWNER}/${config.GITHUB_REPO}`;
+    await configureDns(config.CUSTOM_DOMAIN, config.CF_ZONE_ID, fqdn, config.APP_NAME, config.RESOURCE_GROUP, repoSlug);
   }
 
   // OIDC federated credentials for GitHub Actions
@@ -1100,9 +1084,12 @@ async function deploy(config: Config): Promise<void> {
  */
 async function configureDns(
   customDomain: string, cfZoneId: string, fqdn: string,
-  appName: string, resourceGroup: string,
+  appName: string, resourceGroup: string, repoSlug: string,
 ): Promise<void> {
   console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
+
+  // Ensure we have a valid Cloudflare API token (prompts if needed)
+  await ensureCfApiToken(repoSlug);
 
   const subdomain = customDomain.split('.').slice(0, -2).join('.') || '@';
 
@@ -1156,6 +1143,40 @@ async function configureDns(
   }
 
   console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${customDomain}`))}`);
+
+  // Offer to save CF API token as GitHub secret for CI/CD workflows
+  if (cfApiToken && repoSlug) {
+    const secretExists = tryRun(
+      `gh secret list --repo ${repoSlug} --json name --jq '.[].name' 2>/dev/null`
+    )?.split('\n').includes('CLOUDFLARE_API_TOKEN') ?? false;
+
+    const saveLabel = secretExists
+      ? 'Update CLOUDFLARE_API_TOKEN GitHub secret?'
+      : 'Save CLOUDFLARE_API_TOKEN as a GitHub secret for CI/CD?';
+
+    const saveToken = await confirm({ message: saveLabel, default: !secretExists });
+
+    if (saveToken) {
+      const tokenSpinner = createSpinner('Setting CLOUDFLARE_API_TOKEN secret').start();
+      try {
+        await new Promise<void>((resolvePromise, reject) => {
+          const child = spawn(
+            'gh',
+            ['secret', 'set', 'CLOUDFLARE_API_TOKEN', '--repo', repoSlug],
+            { stdio: ['pipe', 'pipe', 'pipe'] }
+          );
+          child.stdin.write(cfApiToken);
+          child.stdin.end();
+          child.on('close', (code) => (code === 0 ? resolvePromise() : reject(new Error(`gh secret set exited with code ${code}`))));
+          child.on('error', reject);
+        });
+        tokenSpinner.success({ text: 'Setting CLOUDFLARE_API_TOKEN secret' });
+      } catch (err) {
+        tokenSpinner.error({ text: 'Setting CLOUDFLARE_API_TOKEN secret' });
+        console.log(pc.yellow('⚠') + ` Failed to set secret: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
 }
 
 // ─── Teardown ─────────────────────────────────────────────────────────────────
@@ -1268,20 +1289,16 @@ async function teardown(): Promise<void> {
  * Runs the full interactive prompt flow (repo, tag, region, app config, domain).
  * Extracted so it can be called from the detection-skip or normal path.
  * @param saved - Saved/merged config values to use as defaults.
- * @param wranglerAvailable - Whether the Cloudflare Wrangler CLI is available.
  * @returns The full collected {@link Config}.
  */
-async function runPromptFlow(saved: Partial<Config>, wranglerAvailable: boolean): Promise<Config> {
+async function runPromptFlow(saved: Partial<Config>): Promise<Config> {
   const [owner, repo] = await selectGithubRepo(saved);
   const imageTag = await selectImageTag(owner, repo, saved);
   const azureRegion = await selectAzureRegion(saved);
   const appConfig = await configureApp(saved);
 
-  let customDomain = '';
-  let cfZoneId = '';
-  if (wranglerAvailable) {
-    [customDomain, cfZoneId] = await configureCustomDomain(saved);
-  }
+  const repoSlug = `${owner}/${repo}`;
+  const [customDomain, cfZoneId] = await configureCustomDomain(saved, repoSlug);
 
   return {
     GITHUB_OWNER: owner,
@@ -1317,7 +1334,7 @@ async function main(): Promise<void> {
   }
 
   // Step 1: Preflight
-  const wranglerAvailable = preflight();
+  preflight();
 
   // Step 2: Detect existing deployment
   let detected: DetectedApp | null = null;
@@ -1346,11 +1363,9 @@ async function main(): Promise<void> {
     const menuChoices: Array<{ name: string; value: 'redeploy' | 'update' | 'dns' | 'delete' }> = [
       { name: 'Redeploy with current settings', value: 'redeploy' },
       { name: 'Update settings', value: 'update' },
+      { name: 'Configure DNS only (skip deploy)', value: 'dns' },
+      { name: pc.red('Delete stack'), value: 'delete' },
     ];
-    if (wranglerAvailable) {
-      menuChoices.push({ name: 'Configure DNS only (skip deploy)', value: 'dns' });
-    }
-    menuChoices.push({ name: pc.red('Delete stack'), value: 'delete' });
 
     const action = await select({
       message: 'Existing deployment found. What would you like to do?',
@@ -1365,9 +1380,10 @@ async function main(): Promise<void> {
 
     if (action === 'dns') {
       // Configure DNS only — use detected FQDN, skip Bicep deploy
-      const [customDomain, cfZoneId] = await configureCustomDomain(saved);
+      const repoSlug = `${saved.GITHUB_OWNER ?? ''}/${saved.GITHUB_REPO ?? ''}`;
+      const [customDomain, cfZoneId] = await configureCustomDomain(saved, repoSlug);
       if (customDomain && cfZoneId && detected.fqdn) {
-        await configureDns(customDomain, cfZoneId, detected.fqdn, saved.APP_NAME!, saved.RESOURCE_GROUP!);
+        await configureDns(customDomain, cfZoneId, detected.fqdn, saved.APP_NAME!, saved.RESOURCE_GROUP!, repoSlug);
       } else {
         console.log(pc.dim('  No domain configured or FQDN unavailable.'));
       }
@@ -1405,10 +1421,10 @@ async function main(): Promise<void> {
         CUSTOM_DOMAIN: detected.customDomains[0] || saved.CUSTOM_DOMAIN,
       };
 
-      config = await runPromptFlow(mergedSaved, wranglerAvailable);
+      config = await runPromptFlow(mergedSaved);
     }
   } else {
-    config = await runPromptFlow(saved, wranglerAvailable);
+    config = await runPromptFlow(saved);
   }
 
   // Save config
