@@ -1214,25 +1214,41 @@ async function configureDns(
     console.log(pc.yellow('⚠') + ' Could not retrieve domain verification ID — TXT record skipped');
   }
 
-  // Step C — ACA custom domain binding (skip if already bound)
+  // Step C — ACA custom domain binding with managed certificate
   const detectedForDeploy = detectExistingApp(appName, resourceGroup);
   const domainAlreadyBound = detectedForDeploy?.customDomains.includes(customDomain) ?? false;
 
   if (domainAlreadyBound) {
     console.log(`  ${pc.green('✓')} Custom domain already bound: ${customDomain}`);
   } else {
+    // Resolve the Container Apps Environment name from the app
+    const envName = tryRun(
+      `az containerapp show --name "${appName}" -g "${resourceGroup}" --query "properties.managedEnvironmentId" -o tsv 2>/dev/null`
+    )?.split('/').pop() ?? `${appName}-env`;
+
     try {
       await runWithSpinner(
         `Adding hostname ${customDomain} to container app`,
         `az containerapp hostname add --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}"`
       );
-      await runWithSpinner(
-        `Binding TLS certificate for ${customDomain}`,
-        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${appName}-env" --validation-method CNAME`
-      );
     } catch (err) {
-      console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
-      console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
+      // Hostname may already be added but not bound — continue to bind step
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes('already exists') && !msg.includes('already configured')) {
+        console.log(pc.yellow('⚠') + ` Adding hostname failed: ${msg}`);
+        console.log(pc.dim('  Attempting to bind anyway...'));
+      }
+    }
+
+    try {
+      await runWithSpinner(
+        `Binding managed certificate for ${customDomain}`,
+        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${envName}" --validation-method CNAME`
+      );
+      console.log(pc.dim('  Managed certificate provisioning may take 1–2 minutes.'));
+    } catch (err) {
+      console.log(pc.yellow('⚠') + ` Certificate binding failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.log(pc.dim('  You can retry from the wizard menu or bind manually in the Azure portal.'));
     }
   }
 
@@ -1457,10 +1473,11 @@ async function main(): Promise<void> {
   let config: Config;
 
   if (detected) {
-    const menuChoices: Array<{ name: string; value: 'redeploy' | 'update' | 'dns' | 'delete' }> = [
+    const menuChoices: Array<{ name: string; value: 'redeploy' | 'update' | 'dns' | 'bind-domain' | 'delete' }> = [
       { name: 'Redeploy with current settings', value: 'redeploy' },
       { name: 'Update settings', value: 'update' },
       { name: 'Configure DNS only (skip deploy)', value: 'dns' },
+      { name: 'Bind custom domain + managed certificate', value: 'bind-domain' },
       { name: pc.red('Delete stack'), value: 'delete' },
     ];
 
@@ -1483,6 +1500,44 @@ async function main(): Promise<void> {
         await configureDns(customDomain, cfZoneId, detected.fqdn, saved.APP_NAME!, saved.RESOURCE_GROUP!, repoSlug);
       } else {
         console.log(pc.dim('  No domain configured or FQDN unavailable.'));
+      }
+      return;
+    }
+
+    if (action === 'bind-domain') {
+      // Bind a custom domain with managed certificate (DNS must already point to the FQDN)
+      const customDomain = saved.CUSTOM_DOMAIN || await input({
+        message: 'Custom domain to bind (e.g. kota.dog):',
+        validate: (v) => v.trim().length > 0 || 'Domain is required',
+      });
+
+      const envName = tryRun(
+        `az containerapp show --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --query "properties.managedEnvironmentId" -o tsv 2>/dev/null`
+      )?.split('/').pop() ?? `${saved.APP_NAME}-env`;
+
+      console.log(pc.dim(`\n  Environment: ${envName}`));
+      console.log(pc.dim(`  This will add ${customDomain} and provision a managed TLS certificate.\n`));
+
+      try {
+        await runWithSpinner(
+          `Adding hostname ${customDomain}`,
+          `az containerapp hostname add --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}"`
+        );
+      } catch {
+        // May already be added — continue
+      }
+
+      try {
+        await runWithSpinner(
+          `Binding managed certificate for ${customDomain}`,
+          `az containerapp hostname bind --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}" --environment "${envName}" --validation-method CNAME`
+        );
+        console.log(pc.dim('\n  Managed certificate provisioning may take 1–2 minutes.'));
+        console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${customDomain}`))}\n`);
+      } catch (err) {
+        console.log(pc.yellow('\n⚠') + ` Certificate binding failed: ${err instanceof Error ? err.message : String(err)}`);
+        console.log(pc.dim('  Check that DNS (CNAME + asuid TXT) is correctly configured.'));
+        console.log(pc.dim('  Use "Configure DNS only" from the menu to set up DNS records first.\n'));
       }
       return;
     }
