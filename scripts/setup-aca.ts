@@ -231,23 +231,37 @@ async function ensureCfApiToken(repoSlug: string): Promise<string> {
     token = token.trim();
   }
 
-  // Verify the token works (use /user/tokens/verify — works regardless of token scopes)
+  // Verify the token: get account ID first, then call the account-scoped verify endpoint
   const spinner = createSpinner('Verifying Cloudflare API token...').start();
   try {
-    const raw = execSync(
-      `curl -sS "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer $CF_TOKEN"`,
+    // Get account ID
+    const accountsRaw = execSync(
+      `curl -sS "https://api.cloudflare.com/client/v4/accounts" -H "Authorization: Bearer $CF_TOKEN"`,
       { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: token } }
     );
-    const resp = JSON.parse(raw);
-    if (resp.success && resp.result?.status === 'active') {
-      spinner.success({ text: 'Cloudflare API token verified' });
+    const accountsResp = JSON.parse(accountsRaw);
+    const accountId = accountsResp.result?.[0]?.id;
+    if (!accountId) {
+      spinner.error({ text: 'Cloudflare API token verification failed' });
+      const errMsg = accountsResp.errors?.map((e: { message: string }) => e.message).join(', ') || 'no account found';
+      throw new Error(`Could not resolve Cloudflare account: ${errMsg}`);
+    }
+
+    // Verify token against the account
+    const verifyRaw = execSync(
+      `curl -sS "https://api.cloudflare.com/client/v4/accounts/${accountId}/tokens/verify" -H "Authorization: Bearer $CF_TOKEN"`,
+      { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env, CF_TOKEN: token } }
+    );
+    const verifyResp = JSON.parse(verifyRaw);
+    if (verifyResp.success && verifyResp.result?.status === 'active') {
+      spinner.success({ text: `Cloudflare API token verified (account: ${accountsResp.result[0].name})` });
     } else {
-      const errMsg = resp.errors?.map((e: { message: string }) => e.message).join(', ') || 'unknown error';
+      const errMsg = verifyResp.errors?.map((e: { message: string }) => e.message).join(', ') || 'token not active';
       spinner.error({ text: 'Cloudflare API token verification failed' });
       throw new Error(`Cloudflare token is not active: ${errMsg}`);
     }
   } catch (err) {
-    if (err instanceof Error && err.message.includes('Cloudflare token')) throw err;
+    if (err instanceof Error && (err.message.includes('Cloudflare token') || err.message.includes('Cloudflare account'))) throw err;
     spinner.error({ text: 'Cloudflare API token verification failed' });
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(
