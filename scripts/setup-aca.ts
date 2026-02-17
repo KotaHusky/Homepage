@@ -189,7 +189,54 @@ async function runWithSpinner(label: string, cmd: string): Promise<string> {
   }
 }
 
-// ─── DNS helpers ─────────────────────────────────────────────────────────────
+// ─── Cloudflare API helpers ──────────────────────────────────────────────────
+
+/**
+ * Resolves the Cloudflare API token from environment or wrangler config.
+ * @returns The API token, or `null` if not found.
+ */
+function resolveCfApiToken(): string | null {
+  // 1. Environment variable (highest priority)
+  if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
+
+  // 2. Wrangler's stored OAuth token — extract from config file
+  const configPaths = [
+    resolve(process.env.HOME ?? '', '.wrangler/config/default.toml'),
+    resolve(process.env.XDG_CONFIG_HOME ?? resolve(process.env.HOME ?? '', '.config'), 'wrangler/config/default.toml'),
+  ];
+  for (const p of configPaths) {
+    if (!existsSync(p)) continue;
+    const content = readFileSync(p, 'utf-8');
+    const match = content.match(/oauth_token\s*=\s*"([^"]+)"/);
+    if (match) return match[1];
+  }
+
+  return null;
+}
+
+/** Stored Cloudflare API token, resolved once during preflight. */
+let cfApiToken: string | null = null;
+
+/**
+ * Calls the Cloudflare API.
+ * @param method - HTTP method.
+ * @param path - API path (e.g. `/zones`).
+ * @param body - Optional JSON body.
+ * @returns Parsed JSON response.
+ */
+function cfApi(method: string, path: string, body?: Record<string, unknown>): unknown {
+  const args = [
+    `curl -sf -X ${method}`,
+    `"https://api.cloudflare.com/client/v4${path}"`,
+    `-H "Authorization: Bearer ${cfApiToken}"`,
+    `-H "Content-Type: application/json"`,
+  ];
+  if (body) {
+    args.push(`-d '${JSON.stringify(body)}'`);
+  }
+  const raw = run(args.join(' '));
+  return JSON.parse(raw);
+}
 
 /** Options for creating or updating a Cloudflare DNS record. */
 interface DnsRecordOpts {
@@ -201,7 +248,7 @@ interface DnsRecordOpts {
 }
 
 /**
- * Creates, updates, or skips a Cloudflare DNS record.
+ * Creates, updates, or skips a Cloudflare DNS record via the REST API.
  * - If a record of the same type and name exists with the correct content → skip.
  * - If it exists with different content → update in place.
  * - If it doesn't exist → create.
@@ -210,22 +257,18 @@ interface DnsRecordOpts {
  */
 async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<void> {
   const { type, name, content, proxied, displayName } = opts;
-  const proxiedFlag = proxied ? '--proxied true' : '--proxied false';
 
   // Look up existing records of this type+name
   let existingId: string | null = null;
   let existingContent: string | null = null;
   try {
-    const recordsRaw = tryRun(
-      `wrangler dns record list ${zoneId} --name "${name}" --json 2>/dev/null`
-    );
-    if (recordsRaw) {
-      const records = JSON.parse(recordsRaw);
-      const match = records.find((r: { type: string }) => r.type === type);
-      if (match) {
-        existingId = match.id;
-        existingContent = match.content;
-      }
+    const resp = cfApi('GET', `/zones/${zoneId}/dns_records?type=${type}&name=${encodeURIComponent(name)}`) as {
+      result?: Array<{ id: string; content: string }>;
+    };
+    const match = resp.result?.[0];
+    if (match) {
+      existingId = match.id;
+      existingContent = match.content;
     }
   } catch {
     // list failed — fall through to create
@@ -236,18 +279,34 @@ async function upsertDnsRecord(zoneId: string, opts: DnsRecordOpts): Promise<voi
     return;
   }
 
+  const recordBody = { type, name, content, proxied, ttl: 1 };
+
   if (existingId) {
-    // Update existing record
     await runWithSpinner(
       `Updating ${type} ${displayName} → ${content}`,
-      `wrangler dns record update ${existingId} --zone-id ${zoneId} --type ${type} --name "${name}" --content "${content}" ${proxiedFlag}`
+      `curl -sf -X PUT "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${existingId}" -H "Authorization: Bearer ${cfApiToken}" -H "Content-Type: application/json" -d '${JSON.stringify(recordBody)}'`
     );
   } else {
-    // Create new record
     await runWithSpinner(
       `Creating ${type} ${displayName} → ${content}`,
-      `wrangler dns record create ${zoneId} --type ${type} --name "${name}" --content "${content}" ${proxiedFlag}`
+      `curl -sf -X POST "https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records" -H "Authorization: Bearer ${cfApiToken}" -H "Content-Type: application/json" -d '${JSON.stringify(recordBody)}'`
     );
+  }
+}
+
+/**
+ * Lists Cloudflare zones matching a domain name.
+ * @param domain - The root domain to search for.
+ * @returns Matching zones.
+ */
+function listCfZones(domain: string): CfZone[] {
+  try {
+    const resp = cfApi('GET', `/zones?name=${encodeURIComponent(domain)}`) as {
+      result?: CfZone[];
+    };
+    return resp.result ?? [];
+  } catch {
+    return [];
   }
 }
 
@@ -351,20 +410,24 @@ function preflight(): boolean {
   }
   console.log(pc.green('✓') + ` GitHub user: ${pc.cyan(ghUser)}`);
 
-  // Check wrangler CLI (optional — DNS step requires it)
+  // Check Cloudflare API access (optional — DNS step requires it)
   let wranglerAvailable = false;
-  const wranglerVersion = tryRun('wrangler --version 2>/dev/null');
-  if (!wranglerVersion) {
-    console.log(pc.yellow('⚠') + ' Cloudflare Wrangler not found (custom domain step will be skipped)');
-    console.log(pc.dim('  Install: brew install cloudflare-wrangler2'));
+  cfApiToken = resolveCfApiToken();
+  if (!cfApiToken) {
+    console.log(pc.yellow('⚠') + ' Cloudflare API token not found (custom domain step will be skipped)');
+    console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
   } else {
-    const wranglerUser = tryRun('wrangler whoami 2>/dev/null');
-    if (!wranglerUser || wranglerUser.includes('Not authenticated')) {
-      console.log(pc.yellow('⚠') + ' Wrangler found but not authenticated (custom domain step will be skipped)');
-      console.log(pc.dim('  Run: wrangler login'));
-    } else {
+    // Verify the token works
+    const verifyResult = tryRun(
+      `curl -sf "https://api.cloudflare.com/client/v4/user/tokens/verify" -H "Authorization: Bearer ${cfApiToken}"`
+    );
+    if (verifyResult) {
       wranglerAvailable = true;
-      console.log(pc.green('✓') + ' Cloudflare Wrangler authenticated');
+      console.log(pc.green('✓') + ' Cloudflare API authenticated');
+    } else {
+      cfApiToken = null;
+      console.log(pc.yellow('⚠') + ' Cloudflare API token is invalid (custom domain step will be skipped)');
+      console.log(pc.dim('  Set CLOUDFLARE_API_TOKEN or run: wrangler login'));
     }
   }
 
@@ -685,10 +748,7 @@ async function configureCustomDomain(saved: Partial<Config>): Promise<[string, s
   let zoneId = '';
   const spinner = createSpinner(`Resolving Cloudflare zone for ${domain}`).start();
   try {
-    const zonesRaw = run(
-      `wrangler dns list-zones --search "${domain}" --json 2>/dev/null`
-    );
-    const zones: CfZone[] = JSON.parse(zonesRaw);
+    const zones = listCfZones(domain);
     const match = zones.find((z) => z.name === domain);
     if (match) {
       zoneId = match.id;
@@ -874,61 +934,7 @@ async function deploy(config: Config): Promise<void> {
 
   // Custom domain: Cloudflare DNS records + ACA binding
   if (config.CUSTOM_DOMAIN && config.CF_ZONE_ID && fqdn) {
-    console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
-
-    const subdomain = config.CUSTOM_DOMAIN.split('.').slice(0, -2).join('.') || '@';
-
-    // Step A — CNAME record: create or update
-    await upsertDnsRecord(config.CF_ZONE_ID, {
-      type: 'CNAME',
-      name: subdomain,
-      content: fqdn,
-      proxied: true,
-      displayName: config.CUSTOM_DOMAIN,
-    });
-
-    // Step B — TXT validation record for Azure (asuid.<subdomain>)
-    const verificationId = tryRun(
-      `az containerapp show --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --query "properties.customDomainVerificationId" -o tsv 2>/dev/null`
-    );
-
-    if (verificationId) {
-      const txtName = subdomain === '@' ? 'asuid' : `asuid.${subdomain}`;
-      await upsertDnsRecord(config.CF_ZONE_ID, {
-        type: 'TXT',
-        name: txtName,
-        content: verificationId,
-        proxied: false,
-        displayName: `${txtName}.${rootDomain(config.CUSTOM_DOMAIN)}`,
-      });
-    } else {
-      console.log(pc.yellow('⚠') + ' Could not retrieve domain verification ID — TXT record skipped');
-    }
-
-    // Step C — ACA custom domain binding (skip if already bound)
-    const detectedForDeploy = detectExistingApp(config.APP_NAME, config.RESOURCE_GROUP);
-    const domainAlreadyBound = detectedForDeploy?.customDomains.includes(config.CUSTOM_DOMAIN) ?? false;
-
-    if (domainAlreadyBound) {
-      console.log(`  ${pc.green('✓')} Custom domain already bound: ${config.CUSTOM_DOMAIN}`);
-    } else {
-      try {
-        await runWithSpinner(
-          `Adding hostname ${config.CUSTOM_DOMAIN} to container app`,
-          `az containerapp hostname add --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}"`
-        );
-        await runWithSpinner(
-          `Binding TLS certificate for ${config.CUSTOM_DOMAIN}`,
-          `az containerapp hostname bind --name "${config.APP_NAME}" -g "${config.RESOURCE_GROUP}" --hostname "${config.CUSTOM_DOMAIN}" --environment "${config.APP_NAME}-env" --validation-method CNAME`
-        );
-      } catch (err) {
-        console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
-        console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
-      }
-    }
-
-    // Step D — Print custom URL
-    console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${config.CUSTOM_DOMAIN}`))}`);
+    await configureDns(config.CUSTOM_DOMAIN, config.CF_ZONE_ID, fqdn, config.APP_NAME, config.RESOURCE_GROUP);
   }
 
   // OIDC federated credentials for GitHub Actions
@@ -1011,6 +1017,77 @@ async function deploy(config: Config): Promise<void> {
   }
 
   console.log(pc.bold(pc.green('\n✅ Deployment complete!\n')));
+}
+
+// ─── DNS configuration ───────────────────────────────────────────────────────
+
+/**
+ * Configures custom domain DNS records and ACA hostname binding.
+ * Extracted so it can be called from both the deploy flow and the standalone DNS option.
+ * @param customDomain - The custom domain hostname (e.g. `"kota.dog"`).
+ * @param cfZoneId - The Cloudflare zone ID.
+ * @param fqdn - The Azure Container App FQDN to point DNS at.
+ * @param appName - The container app name.
+ * @param resourceGroup - The Azure resource group name.
+ */
+async function configureDns(
+  customDomain: string, cfZoneId: string, fqdn: string,
+  appName: string, resourceGroup: string,
+): Promise<void> {
+  console.log(pc.bold('\n🌐 Custom Domain Setup\n'));
+
+  const subdomain = customDomain.split('.').slice(0, -2).join('.') || '@';
+
+  // Step A — CNAME record: create or update
+  await upsertDnsRecord(cfZoneId, {
+    type: 'CNAME',
+    name: subdomain,
+    content: fqdn,
+    proxied: true,
+    displayName: customDomain,
+  });
+
+  // Step B — TXT validation record for Azure (asuid.<subdomain>)
+  const verificationId = tryRun(
+    `az containerapp show --name "${appName}" -g "${resourceGroup}" --query "properties.customDomainVerificationId" -o tsv 2>/dev/null`
+  );
+
+  if (verificationId) {
+    const txtName = subdomain === '@' ? 'asuid' : `asuid.${subdomain}`;
+    await upsertDnsRecord(cfZoneId, {
+      type: 'TXT',
+      name: txtName,
+      content: verificationId,
+      proxied: false,
+      displayName: `${txtName}.${rootDomain(customDomain)}`,
+    });
+  } else {
+    console.log(pc.yellow('⚠') + ' Could not retrieve domain verification ID — TXT record skipped');
+  }
+
+  // Step C — ACA custom domain binding (skip if already bound)
+  const detectedForDeploy = detectExistingApp(appName, resourceGroup);
+  const domainAlreadyBound = detectedForDeploy?.customDomains.includes(customDomain) ?? false;
+
+  if (domainAlreadyBound) {
+    console.log(`  ${pc.green('✓')} Custom domain already bound: ${customDomain}`);
+  } else {
+    try {
+      await runWithSpinner(
+        `Adding hostname ${customDomain} to container app`,
+        `az containerapp hostname add --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}"`
+      );
+      await runWithSpinner(
+        `Binding TLS certificate for ${customDomain}`,
+        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${appName}-env" --validation-method CNAME`
+      );
+    } catch (err) {
+      console.log(pc.yellow('⚠') + ` Custom domain binding failed: ${err instanceof Error ? err.message : String(err)}`);
+      console.log(pc.dim('  You may need to configure DNS and retry, or bind manually in the Azure portal.'));
+    }
+  }
+
+  console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${customDomain}`))}`);
 }
 
 // ─── Teardown ─────────────────────────────────────────────────────────────────
@@ -1198,18 +1275,34 @@ async function main(): Promise<void> {
   let config: Config;
 
   if (detected) {
-    const action = await select<'redeploy' | 'update' | 'delete'>({
+    const menuChoices: Array<{ name: string; value: 'redeploy' | 'update' | 'dns' | 'delete' }> = [
+      { name: 'Redeploy with current settings', value: 'redeploy' },
+      { name: 'Update settings', value: 'update' },
+    ];
+    if (wranglerAvailable) {
+      menuChoices.push({ name: 'Configure DNS only (skip deploy)', value: 'dns' });
+    }
+    menuChoices.push({ name: pc.red('Delete stack'), value: 'delete' });
+
+    const action = await select({
       message: 'Existing deployment found. What would you like to do?',
-      choices: [
-        { name: `Redeploy with current settings`, value: 'redeploy' as const },
-        { name: `Update settings`, value: 'update' as const },
-        { name: pc.red('Delete stack'), value: 'delete' as const },
-      ],
+      choices: menuChoices,
     });
     console.log();
 
     if (action === 'delete') {
       await teardown();
+      return;
+    }
+
+    if (action === 'dns') {
+      // Configure DNS only — use detected FQDN, skip Bicep deploy
+      const [customDomain, cfZoneId] = await configureCustomDomain(saved);
+      if (customDomain && cfZoneId && detected.fqdn) {
+        await configureDns(customDomain, cfZoneId, detected.fqdn, saved.APP_NAME!, saved.RESOURCE_GROUP!);
+      } else {
+        console.log(pc.dim('  No domain configured or FQDN unavailable.'));
+      }
       return;
     }
 
