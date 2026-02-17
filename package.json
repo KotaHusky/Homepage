@@ -11,7 +11,8 @@
     "start": "npx next start",
     "start:docker-clean-build": "docker build -t homepage:latest .;docker run -p 3000:3000 homepage:latest",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "setup:aca": "tsx scripts/setup-aca.ts"
   },
   "packageManager": "npm@9.6.7",
   "private": true,
@@ -20,7 +21,10 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.0.18",
+    "@inquirer/prompts": "^8.2.1",
+    "nanospinner": "^1.2.2",
     "next": "^15.5.12",
+    "picocolors": "^1.1.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "tslib": "^2.3.0"
@@ -52,6 +56,7 @@
     "semantic-release": "^25.0.3",
     "tailwindcss": "3.4.3",
     "ts-node": "10.9.1",
+    "tsx": "^4.21.0",
     "turbo": "^2.8.9",
     "typescript": "5.7.3",
     "vite": "^5.4.21",

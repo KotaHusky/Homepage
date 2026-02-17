@@ -44,6 +44,12 @@ Thumbs.db
 # Next.js
 .next
 
+# TypeScript build info
+*.tsbuildinfo
+
+# Setup wizard config (contains Azure/GitHub selections)
+.setup-aca.env
+
 # Claude Code — keep agents, ignore everything else
 .claude/*
 !.claude/agents/
