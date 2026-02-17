@@ -1247,7 +1247,7 @@ async function configureDns(
     try {
       await runWithSpinner(
         `Binding managed certificate for ${customDomain} (${validationMethod} validation)`,
-        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod}`
+        `az containerapp hostname bind --name "${appName}" -g "${resourceGroup}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod} --no-wait`
       );
       console.log(pc.dim('  Managed certificate provisioning may take up to 20 minutes.'));
     } catch (err) {
@@ -1538,7 +1538,7 @@ async function main(): Promise<void> {
       try {
         await runWithSpinner(
           `Binding managed certificate for ${customDomain} (${validationMethod} validation)`,
-          `az containerapp hostname bind --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod}`
+          `az containerapp hostname bind --name "${saved.APP_NAME}" -g "${saved.RESOURCE_GROUP}" --hostname "${customDomain}" --environment "${envName}" --validation-method ${validationMethod} --no-wait`
         );
         console.log(pc.dim('\n  Managed certificate provisioning may take up to 20 minutes.'));
         console.log(`\n  ${pc.green('→')} Custom URL: ${pc.cyan(pc.bold(`https://${customDomain}`))}\n`);
