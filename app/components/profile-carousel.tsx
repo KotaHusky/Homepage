@@ -1,13 +1,18 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Image from 'next/image';
+import Image, { StaticImageData } from 'next/image';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
+import kotaImg from '../../public/images/kota.webp';
+import kota2Img from '../../public/images/kota2.webp';
+import meImg from '../../public/images/me.webp';
 
-const images = [
-  { src: '/images/kota.png', alt: 'Profile picture 1' },
-  { src: '/images/kota2.png', alt: 'Profile picture 2' },
-  { src: '/images/me.png', alt: 'Profile picture 3' },
+type CarouselImage = { src: StaticImageData; alt: string };
+
+const images: CarouselImage[] = [
+  { src: kotaImg, alt: 'Kota Husky profile photo' },
+  { src: kota2Img, alt: 'Kota Husky profile photo 2' },
+  { src: meImg, alt: 'Kota Husky profile photo 3' },
 ];
 
 const AUTO_ROTATE_MS = 5000;
@@ -75,7 +80,7 @@ export function ProfileCarousel() {
 
           return (
             <div
-              key={img.src}
+              key={img.alt}
               className="absolute top-1/2 left-1/2 w-32 h-32 md:w-64 md:h-64 rounded-full overflow-hidden transition-all duration-700 ease-in-out"
               style={{
                 transform: `translate(-50%, -50%) translateX(${offset * 85}%) scale(${isCenter ? 1 : 0.5})`,
@@ -89,6 +94,8 @@ export function ProfileCarousel() {
                 width={256}
                 height={256}
                 className="w-full h-full object-cover"
+                placeholder="blur"
+                priority={index === 0}
               />
             </div>
           );
