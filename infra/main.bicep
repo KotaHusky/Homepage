@@ -16,7 +16,7 @@
 
 targetScope = 'resourceGroup'
 
-module acaApp 'https://raw.githubusercontent.com/KotaHusky/cicd-toolkit/main/infra/modules/aca-app.bicep' = {
+module acaApp './modules/aca-app.bicep' = {
   name: 'homepage-aca'
   params: {
     appName: 'homepage'
