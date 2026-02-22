@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/KotaHusky/Homepage/compare/v1.3.0...v1.4.0) (2026-02-22)
+
+
+### Features
+
+* telegram modal with messaging guidelines ([#26](https://github.com/KotaHusky/Homepage/issues/26)) ([353df3d](https://github.com/KotaHusky/Homepage/commit/353df3d364544087ec052f046acac1bc62de189d))
+
 # [1.3.0](https://github.com/KotaHusky/Homepage/compare/v1.2.1...v1.3.0) (2026-02-16)
 
 
