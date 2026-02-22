@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/KotaHusky/Homepage/compare/v1.5.0...v1.5.1) (2026-02-22)
+
+
+### Performance Improvements
+
+* compress images to WebP and add priority/blur loading ([#39](https://github.com/KotaHusky/Homepage/issues/39)) ([2eae6b1](https://github.com/KotaHusky/Homepage/commit/2eae6b13c12308e5c29ebe1df2cdd25e4c48013a))
+
 # [1.5.0](https://github.com/KotaHusky/Homepage/compare/v1.4.0...v1.5.0) (2026-02-22)
 
 
