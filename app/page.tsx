@@ -1,6 +1,7 @@
 import { HomepageButton } from "./components/homepage-button";
 import { SocialIcon } from "./components/social-icon";
 import { ProfileCarousel } from "./components/profile-carousel";
+import { TelegramModal } from "./components/telegram-modal";
 import {MapPinIcon} from '@heroicons/react/20/solid'
 import packageJson from '../package.json'
 
@@ -43,7 +44,7 @@ export default async function Index() {
             <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} />
             <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} />
             <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} />
-            <SocialIcon icon={"fa-brands fa-telegram"} href={"https://t.me/KotaHusky"} />
+            <TelegramModal />
             {/* <SocialIcon icon={"fa-envelope"} /> TODO: REIMPLEMENT AS FORM */}
           </div>
         </div>
