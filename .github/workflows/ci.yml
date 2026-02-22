@@ -62,6 +62,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: docker
+    uses: KotaHusky/cicd-toolkit/.github/workflows/aca-deploy.yml@main
+    with:
+      container-app-name: homepage
+      resource-group: homepage-rg
+      image: ghcr.io/kotahusky/homepage@${{ needs.docker.outputs.digest }}
+    permissions:
+      id-token: write
+      contents: read
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
   docker-release:
     if: needs.release.outputs.new_release_published == 'true'
     needs: [docker, release]
