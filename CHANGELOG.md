@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/KotaHusky/Homepage/compare/v1.4.0...v1.5.0) (2026-02-22)
+
+
+### Features
+
+* deploy to Azure Container Apps ([#27](https://github.com/KotaHusky/Homepage/issues/27)) ([901b49e](https://github.com/KotaHusky/Homepage/commit/901b49e59136aeb4d199c9aa23a252b40b161fc6)), closes [#7](https://github.com/KotaHusky/Homepage/issues/7)
+
 # [1.4.0](https://github.com/KotaHusky/Homepage/compare/v1.3.0...v1.4.0) (2026-02-22)
 
 
