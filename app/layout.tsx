@@ -15,6 +15,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="stylesheet" href="https://use.typekit.net/vxp7yul.css" precedence="default" />
+        <link rel="preload" as="image" href="/images/background-horizontal.webp" media="(min-width: 768px)" />
+        <link rel="preload" as="image" href="/images/background-vertical.webp" media="(max-width: 767px)" />
       </head>
       <Script id="fontawesome" src="https://kit.fontawesome.com/cea9781086.js" crossOrigin="anonymous" strategy="afterInteractive" />
       <Script id="gtag-manager" src="https://www.googletagmanager.com/gtag/js?id=G-S7KWG10TS2" strategy="afterInteractive" />
