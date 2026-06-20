@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/KotaHusky/Homepage/compare/v1.7.2...v1.8.0) (2026-06-20)
+
+
+### Features
+
+* **infra:** v2.2.0 observability + robust ALB resolution ([#45](https://github.com/KotaHusky/Homepage/issues/45)) ([ed48461](https://github.com/KotaHusky/Homepage/commit/ed484617d6326f7d3e1257b52c5be9a11edffaf0))
+
 ## [1.7.2](https://github.com/KotaHusky/Homepage/compare/v1.7.1...v1.7.2) (2026-06-20)
 
 
