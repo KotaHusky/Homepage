@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image, { StaticImageData } from 'next/image';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/20/solid';
+import { usePrefersReducedMotion } from '../lib/media';
 import kotaImg from '../../public/images/kota.webp';
 import kota2Img from '../../public/images/kota2.webp';
 import meImg from '../../public/images/me.webp';
@@ -21,6 +22,7 @@ const CLICK_PAUSE_MS = 15000;
 export function ProfileCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const reduceMotion = usePrefersReducedMotion();
   const rotateRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pauseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -38,13 +40,13 @@ export function ProfileCarousel() {
   }, []);
 
   useEffect(() => {
-    if (!isPaused) {
+    if (!isPaused && !reduceMotion) {
       startAutoRotate();
     } else {
       if (rotateRef.current) { clearInterval(rotateRef.current); rotateRef.current = null; }
     }
     return clearTimers;
-  }, [isPaused, startAutoRotate, clearTimers]);
+  }, [isPaused, reduceMotion, startAutoRotate, clearTimers]);
 
   const handleArrowClick = (direction: 1 | -1) => {
     setActiveIndex((prev) => (prev + direction + images.length) % images.length);
@@ -64,10 +66,14 @@ export function ProfileCarousel() {
       className="my-8 flex items-center justify-center gap-2 md:gap-4"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
+      onFocus={() => setIsPaused(true)}
+      onBlur={() => setIsPaused(false)}
+      aria-roledescription="carousel"
+      aria-label="Profile photos"
     >
       <button
         onClick={() => handleArrowClick(-1)}
-        className="text-gray-400 hover:text-white transition-colors p-1"
+        className="rounded-full text-gray-400 hover:text-white transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         aria-label="Previous photo"
       >
         <ChevronLeftIcon className="w-6 h-6 md:w-8 md:h-8" />
@@ -104,7 +110,7 @@ export function ProfileCarousel() {
 
       <button
         onClick={() => handleArrowClick(1)}
-        className="text-gray-400 hover:text-white transition-colors p-1"
+        className="rounded-full text-gray-400 hover:text-white transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         aria-label="Next photo"
       >
         <ChevronRightIcon className="w-6 h-6 md:w-8 md:h-8" />

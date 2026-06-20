@@ -2,13 +2,21 @@ export interface SocialIconProps {
   icon: string;
   text?: string;
   href: string;
+  /** Accessible name for the icon-only link (announced by screen readers). */
+  label?: string;
 }
 
 export function SocialIcon(props: SocialIconProps) {
   return (
-    <a className="transition-colors duration-200 ease-in-out hover:text-blue-500" href={props.href} target="_blank" rel="noreferrer">
-      <i className={`fa-solid ${props.icon}`}></i>
-      <span>{props.text}</span>
+    <a
+      className="rounded-sm transition-colors duration-200 ease-in-out hover:text-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+      href={props.href}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={props.label ?? props.text}
+    >
+      <i className={`fa-solid ${props.icon}`} aria-hidden="true"></i>
+      {props.text && <span>{props.text}</span>}
     </a>
   );
 }

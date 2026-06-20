@@ -8,12 +8,16 @@ export function TelegramModal() {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") setIsOpen(false);
+      };
+      document.addEventListener("keydown", onKeyDown);
+      return () => {
+        document.body.style.overflow = "";
+        document.removeEventListener("keydown", onKeyDown);
+      };
     }
-    return () => {
-      document.body.style.overflow = "";
-    };
+    document.body.style.overflow = "";
   }, [isOpen]);
 
   return (
@@ -32,12 +36,15 @@ export function TelegramModal() {
           onClick={() => setIsOpen(false)}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="telegram-modal-title"
             className="relative mx-4 max-w-md rounded-xl bg-gray-900 border border-gray-700 p-6 text-left shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setIsOpen(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-white transition-colors"
+              className="absolute top-3 right-3 rounded-sm text-gray-500 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
               aria-label="Close"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -45,7 +52,7 @@ export function TelegramModal() {
               </svg>
             </button>
 
-            <h2 className="text-xl font-semibold text-white mb-4">Before you message me</h2>
+            <h2 id="telegram-modal-title" className="text-xl font-semibold text-white mb-4">Before you message me</h2>
 
             <div className="space-y-3 text-sm text-gray-300">
               <p>
