@@ -1,3 +1,13 @@
+# [2.0.0](https://github.com/KotaHusky/Homepage/compare/v1.9.1...v2.0.0) (2026-06-20)
+
+
+* feat!: glassmorphism redesign, a11y pass, and major dependency upgrades ([#49](https://github.com/KotaHusky/Homepage/issues/49)) ([fea2537](https://github.com/KotaHusky/Homepage/commit/fea25373e5f287616fc33aba1b7ebdf2b182f393))
+
+
+### BREAKING CHANGES
+
+* upgrades to Next 16, Tailwind 4, ESLint 9 flat config, TypeScript 6, and Vitest 4; drops autoprefixer and next lint; minimum Node is now 24.
+
 ## [1.9.1](https://github.com/KotaHusky/Homepage/compare/v1.9.0...v1.9.1) (2026-06-20)
 
 
