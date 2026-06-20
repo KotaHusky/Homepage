@@ -14,7 +14,7 @@ export function HomepageButton(props: HomepageButtonProps) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className={`block text-center bg-white/10 hover:bg-blue-500/30 text-white font-bold py-2 px-4 w-full min-w-[100px] max-w-[200px] mb-4 rounded border border-solid border-white/15 hover:border-blue-400/40 backdrop-blur-md shadow-lg transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className ?? ''}`}
+      className={`block text-center bg-white/5 hover:bg-blue-500/20 text-white font-bold py-2 px-4 w-full min-w-[100px] max-w-[200px] mb-4 rounded border border-solid border-white/10 hover:border-blue-400/30 backdrop-blur-sm shadow-md transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className ?? ''}`}
     >
       {buttonText}
     </a>
