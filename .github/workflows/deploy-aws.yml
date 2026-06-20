@@ -7,14 +7,16 @@ name: Deploy (AWS / ECS Express)
 #   - OIDC deploy role            -> secret AWS_DEPLOY_ROLE_ARN
 #   - ECS task execution role     -> secret ECS_EXECUTION_ROLE_ARN
 #   - ECS infrastructure role     -> secret ECS_INFRASTRUCTURE_ROLE_ARN
-#   - Route53 hosted zone for DOMAIN_NAME (if using a custom domain)
+# DNS is on Cloudflare (no Route53). For a custom domain: import a us-east-1 ACM
+# cert via -c certificateArn=..., then add the Cloudflare records (CNAME ->
+# DistributionDomain) using the Cloudflare MCP server. See infra/README.aws.md.
 # Set AWS_ACCOUNT_ID as a repo variable, then uncomment the `push` trigger.
 
 on:
   workflow_dispatch:
     inputs:
       custom_domain:
-        description: 'Deploy with the custom domain (ACM + Route53). Set false to smoke-test on the CloudFront URL only (no DNS).'
+        description: 'Deploy with the custom domain (ACM cert; Cloudflare DNS). Set false to smoke-test on the CloudFront URL only.'
         type: boolean
         default: true
   # push:
@@ -33,7 +35,6 @@ env:
   CONTAINER_PORT: '3000'
   HEALTH_CHECK_PATH: /api/health
   DOMAIN_NAME: kota.dog
-  HOSTED_ZONE_NAME: kota.dog
   # Observability tier for the edge stack: dev (dashboard only) or prod
   # (dashboard + alarms + access logs + 90d retention). Flip to prod after cutover.
   OBSERVABILITY_TIER: dev
@@ -140,7 +141,7 @@ jobs:
           npm ci
           DOMAIN_FLAGS=""
           if [ "${USE_DOMAIN:-true}" = "true" ]; then
-            DOMAIN_FLAGS="-c domainName=${{ env.DOMAIN_NAME }} -c hostedZoneName=${{ env.HOSTED_ZONE_NAME }}"
+            DOMAIN_FLAGS="-c domainName=${{ env.DOMAIN_NAME }}"
           else
             echo "::notice::Deploying edge WITHOUT custom domain (CloudFront URL only)"
           fi
