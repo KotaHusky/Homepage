@@ -10,3 +10,5 @@ e2e
 jest.config*
 vitest.config*
 tsconfig*.json
+infra
+cdk.out
