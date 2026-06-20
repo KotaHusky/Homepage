@@ -12,6 +12,11 @@ name: Deploy (AWS / ECS Express)
 
 on:
   workflow_dispatch:
+    inputs:
+      custom_domain:
+        description: 'Deploy with the custom domain (ACM + Route53). Set false to smoke-test on the CloudFront URL only (no DNS).'
+        type: boolean
+        default: true
   # push:
   #   branches: [main]
   #   paths-ignore: ['*.md', 'LICENSE', 'docs/**']
@@ -113,14 +118,21 @@ jobs:
           echo "tg=$(echo "$TG_ARN" | sed 's#.*:##')" >> "$GITHUB_OUTPUT"
       - name: Deploy edge stack
         working-directory: infra
+        env:
+          USE_DOMAIN: ${{ inputs.custom_domain }}
         run: |
           npm ci
+          DOMAIN_FLAGS=""
+          if [ "${USE_DOMAIN:-true}" = "true" ]; then
+            DOMAIN_FLAGS="-c domainName=${{ env.DOMAIN_NAME }} -c hostedZoneName=${{ env.HOSTED_ZONE_NAME }}"
+          else
+            echo "::notice::Deploying edge WITHOUT custom domain (CloudFront URL only)"
+          fi
           npx cdk deploy HomepageEdge --require-approval never \
             -c account=${{ env.AWS_ACCOUNT_ID }} \
             -c region=${{ env.AWS_REGION }} \
             -c albDns='${{ needs.service.outputs.endpoint }}' \
-            -c domainName=${{ env.DOMAIN_NAME }} \
-            -c hostedZoneName=${{ env.HOSTED_ZONE_NAME }} \
+            $DOMAIN_FLAGS \
             -c serviceName=${{ env.SERVICE_NAME }} \
             -c loadBalancerFullName='${{ steps.ids.outputs.lb }}' \
             -c targetGroupFullName='${{ steps.ids.outputs.tg }}' \
