@@ -1,21 +1,20 @@
 name: Deploy (AWS / ECS Express)
 
-# Deploys an environment (dev or prod) of Homepage:
-#   build image -> mirror to ECR -> ECS Express service -> CloudFront edge.
+# Thin caller — all orchestration lives in cicd-toolkit's reusable
+# ecs-express-app-deploy workflow.
+#   push to main             -> prod (kota.dog, min-tasks 1)
+#   PR labeled `deploy:dev`  -> dev  (dev.kota.dog, min-tasks 0, scale-to-zero)
+#   workflow_dispatch        -> manual dev/prod
 #
-# Environments:
-#   prod -> service `homepage`,     min-tasks 1, kota.dog,      obs tier prod
-#   dev  -> service `homepage-dev`, min-tasks 0 (scale-to-zero), dev.kota.dog, obs tier dev
-#
-# DNS is on Cloudflare (no Route53). ACM certs are pre-minted and imported via
-# the ACM_CERT_ARN_PROD / ACM_CERT_ARN_DEV repo variables; after first deploy,
-# add a Cloudflare CNAME <domain> -> <DistributionDomain> (use the Cloudflare
-# MCP server). See infra/README.aws.md.
-#
-# Prereqs (repo): vars AWS_ACCOUNT_ID, ACM_CERT_ARN_PROD, ACM_CERT_ARN_DEV;
-# secrets AWS_DEPLOY_ROLE_ARN, ECS_EXECUTION_ROLE_ARN, ECS_INFRASTRUCTURE_ROLE_ARN.
+# Repo vars: AWS_ACCOUNT_ID, ACM_CERT_ARN_PROD, ACM_CERT_ARN_DEV.
+# Secrets: AWS_DEPLOY_ROLE_ARN, ECS_EXECUTION_ROLE_ARN, ECS_INFRASTRUCTURE_ROLE_ARN.
 
 on:
+  push:
+    branches: [main]
+    paths-ignore: ['*.md', 'LICENSE', 'docs/**']
+  pull_request:
+    types: [labeled, synchronize, reopened]
   workflow_dispatch:
     inputs:
       environment:
@@ -23,179 +22,30 @@ on:
         type: choice
         options: [dev, prod]
         default: dev
-  # push to main deploys prod (enable once verified):
-  # push:
-  #   branches: [main]
-  #   paths-ignore: ['*.md', 'LICENSE', 'docs/**']
 
 permissions:
   contents: read
   packages: write
   id-token: write
 
-env:
-  AWS_REGION: us-east-1
-  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-  APP: homepage
+# Cancel superseded runs on the same ref (rapid pushes to a PR/main).
+concurrency:
+  group: deploy-aws-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # 0. Derive per-environment config (push to main => prod).
-  config:
-    runs-on: ubuntu-latest
-    outputs:
-      env: ${{ steps.c.outputs.env }}
-      service: ${{ steps.c.outputs.service }}
-      min_tasks: ${{ steps.c.outputs.min_tasks }}
-      domain: ${{ steps.c.outputs.domain }}
-      obs_tier: ${{ steps.c.outputs.obs_tier }}
-      stack: ${{ steps.c.outputs.stack }}
-      cert_arn: ${{ steps.c.outputs.cert_arn }}
-    steps:
-      - id: c
-        run: |
-          ENV="${{ github.event.inputs.environment || 'prod' }}"
-          if [ "$ENV" = "prod" ]; then
-            {
-              echo "env=prod"; echo "service=homepage"; echo "min_tasks=1"
-              echo "domain=kota.dog"; echo "obs_tier=prod"; echo "stack=HomepageEdgeProd"
-              echo "cert_arn=${{ vars.ACM_CERT_ARN_PROD }}"
-            } >> "$GITHUB_OUTPUT"
-          else
-            {
-              echo "env=dev"; echo "service=homepage-dev"; echo "min_tasks=0"
-              echo "domain=dev.kota.dog"; echo "obs_tier=dev"; echo "stack=HomepageEdgeDev"
-              echo "cert_arn=${{ vars.ACM_CERT_ARN_DEV }}"
-            } >> "$GITHUB_OUTPUT"
-          fi
-
-  # 0b. Detect whether the edge (infra/) changed. On push, the slow CloudFront
-  #     edge job is skipped unless infra/ changed; dispatch always runs it.
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      infra: ${{ steps.f.outputs.infra }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: f
-        with:
-          filters: |
-            infra:
-              - 'infra/**'
-              - '.github/workflows/deploy-aws.yml'
-
-  # 1. Build the Next.js standalone image (shared across envs) and push to GHCR.
-  image:
-    uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
+  deploy:
+    uses: KotaHusky/cicd-toolkit/.github/workflows/ecs-express-app-deploy.yml@main
     with:
-      push: true
-    permissions:
-      contents: read
-      packages: write
-
-  # 2. Mirror the GHCR image into the shared private ECR repo.
-  mirror:
-    needs: [config, image]
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    outputs:
-      ecr-image: ${{ steps.mirror.outputs.ecr-image }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - id: mirror
-        uses: KotaHusky/cicd-toolkit/actions/ecr-mirror@v2
-        with:
-          source-image: ghcr.io/kotahusky/${{ env.APP }}@${{ needs.image.outputs.digest }}
-          ecr-repo: ${{ env.APP }}
-          ecr-tag: ${{ github.sha }}
-          aws-region: ${{ env.AWS_REGION }}
-
-  # 3. Deploy the ECS Express service for this environment.
-  service:
-    needs: [config, mirror]
-    uses: KotaHusky/cicd-toolkit/.github/workflows/ecs-express-deploy.yml@main
-    with:
-      service-name: ${{ needs.config.outputs.service }}
-      image: ${{ needs.mirror.outputs.ecr-image }}
-      aws-region: us-east-1
-      container-port: 3000
-      health-check-path: /api/health
-      min-task-count: ${{ fromJSON(needs.config.outputs.min_tasks) }}
+      app: homepage
+      stack-prefix: HomepageEdge
+      prod-domain: kota.dog
+      dev-domain: dev.kota.dog
+      prod-cert-arn: ${{ vars.ACM_CERT_ARN_PROD }}
+      dev-cert-arn: ${{ vars.ACM_CERT_ARN_DEV }}
+      aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+      environment: ${{ github.event.inputs.environment }}
     secrets:
       role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
       execution-role-arn: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
       infrastructure-role-arn: ${{ secrets.ECS_INFRASTRUCTURE_ROLE_ARN }}
-
-  # 4. Deploy the CloudFront edge + observability for this environment.
-  #    Skipped on push when infra/ is unchanged (CloudFront is the slow step);
-  #    always runs on manual dispatch.
-  edge:
-    needs: [config, service, changes]
-    if: >-
-      always() && needs.service.result == 'success' &&
-      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.infra == 'true')
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Resolve ALB + ECS identifiers for the dashboard (best-effort)
-        id: ids
-        shell: bash
-        env:
-          SVC: ${{ needs.config.outputs.service }}
-        run: |
-          SERVICE_ARN='${{ needs.service.outputs.service-arn }}'
-          echo "cluster=$(echo "$SERVICE_ARN" | awk -F'/' '{print $2}')" >> "$GITHUB_OUTPUT"
-          echo "service=$(echo "$SERVICE_ARN" | awk -F'/' '{print $3}')" >> "$GITHUB_OUTPUT"
-          LB_ARN=$(aws elbv2 describe-load-balancers \
-            --query "LoadBalancers[?starts_with(LoadBalancerName,'ecs-express-gateway')].LoadBalancerArn | [0]" \
-            --output text 2>/dev/null || true)
-          if [ -n "$LB_ARN" ] && [ "$LB_ARN" != "None" ]; then
-            echo "lb=$(echo "$LB_ARN" | sed 's#.*:loadbalancer/##')" >> "$GITHUB_OUTPUT"
-            TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn "$LB_ARN" \
-              --query "TargetGroups[?contains(TargetGroupName,'${SVC}')].TargetGroupArn | [0]" \
-              --output text 2>/dev/null || true)
-            if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
-              echo "tg=$(echo "$TG_ARN" | sed 's#.*:##')" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "::warning::ECS Express gateway ALB not found; dashboard ALB widgets skipped"
-          fi
-      - name: Cache infra node_modules (rebuilds the cicd-toolkit git dep)
-        uses: actions/cache@v4
-        with:
-          path: infra/node_modules
-          key: infra-nm-${{ runner.os }}-${{ hashFiles('infra/package-lock.json') }}
-      - name: Deploy edge stack (${{ needs.config.outputs.env }})
-        working-directory: infra
-        run: |
-          npm ci --prefer-offline
-          npx cdk deploy ${{ needs.config.outputs.stack }} --require-approval never \
-            -c account=${{ env.AWS_ACCOUNT_ID }} \
-            -c region=${{ env.AWS_REGION }} \
-            -c stackName=${{ needs.config.outputs.stack }} \
-            -c albDns='${{ needs.service.outputs.endpoint }}' \
-            -c domainName=${{ needs.config.outputs.domain }} \
-            -c certificateArn=${{ needs.config.outputs.cert_arn }} \
-            -c observabilityTier=${{ needs.config.outputs.obs_tier }} \
-            -c serviceName=${{ needs.config.outputs.service }} \
-            -c dashboardName=${{ needs.config.outputs.stack }} \
-            -c loadBalancerFullName='${{ steps.ids.outputs.lb }}' \
-            -c targetGroupFullName='${{ steps.ids.outputs.tg }}' \
-            -c ecsClusterName='${{ steps.ids.outputs.cluster }}' \
-            -c ecsServiceName='${{ steps.ids.outputs.service }}'
