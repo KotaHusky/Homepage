@@ -1,0 +1,128 @@
+name: Deploy (AWS / ECS Express)
+
+# App-specific deploy config lives HERE in the consuming workflow.
+# Pipeline: build image -> mirror to ECR -> ECS Express service -> CloudFront edge.
+#
+# Prerequisites (one-time, in the target AWS account):
+#   - OIDC deploy role            -> secret AWS_DEPLOY_ROLE_ARN
+#   - ECS task execution role     -> secret ECS_EXECUTION_ROLE_ARN
+#   - ECS infrastructure role     -> secret ECS_INFRASTRUCTURE_ROLE_ARN
+#   - Route53 hosted zone for DOMAIN_NAME (if using a custom domain)
+# Set AWS_ACCOUNT_ID as a repo variable, then uncomment the `push` trigger.
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths-ignore: ['*.md', 'LICENSE', 'docs/**']
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  SERVICE_NAME: homepage
+  CONTAINER_PORT: '3000'
+  HEALTH_CHECK_PATH: /api/health
+  DOMAIN_NAME: kota.dog
+  HOSTED_ZONE_NAME: kota.dog
+
+jobs:
+  # 1. Build the Next.js standalone image and push to GHCR.
+  image:
+    uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
+    with:
+      push: true
+    permissions:
+      contents: read
+      packages: write
+
+  # 2. Mirror the GHCR image into a private ECR repo.
+  mirror:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      ecr-image: ${{ steps.mirror.outputs.ecr-image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - id: mirror
+        uses: KotaHusky/cicd-toolkit/actions/ecr-mirror@v2
+        with:
+          source-image: ghcr.io/${{ github.repository }}@${{ needs.image.outputs.digest }}
+          ecr-repo: ${{ env.SERVICE_NAME }}
+          ecr-tag: ${{ github.sha }}
+          aws-region: ${{ env.AWS_REGION }}
+
+  # 3. Deploy the ECS Express service (auto-provisions Fargate + ALB).
+  service:
+    needs: mirror
+    uses: KotaHusky/cicd-toolkit/.github/workflows/ecs-express-deploy.yml@main
+    with:
+      service-name: homepage
+      image: ${{ needs.mirror.outputs.ecr-image }}
+      aws-region: us-east-1
+      container-port: 3000
+      health-check-path: /api/health
+    secrets:
+      role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+      execution-role-arn: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
+      infrastructure-role-arn: ${{ secrets.ECS_INFRASTRUCTURE_ROLE_ARN }}
+
+  # 4. Deploy the CloudFront edge + dashboard (inlined: cdk-deploy.yml runs at
+  #    repo root, but our CDK app lives in infra/).
+  edge:
+    needs: service
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Resolve ALB + ECS identifiers for the dashboard
+        id: ids
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENDPOINT='${{ needs.service.outputs.endpoint }}'
+          SERVICE_ARN='${{ needs.service.outputs.service-arn }}'
+          # arn:aws:ecs:region:acct:service/<cluster>/<service>
+          echo "cluster=$(echo "$SERVICE_ARN" | awk -F'/' '{print $2}')" >> "$GITHUB_OUTPUT"
+          echo "service=$(echo "$SERVICE_ARN" | awk -F'/' '{print $3}')" >> "$GITHUB_OUTPUT"
+          LB_ARN=$(aws elbv2 describe-load-balancers \
+            --query "LoadBalancers[?DNSName=='${ENDPOINT}'].LoadBalancerArn | [0]" --output text)
+          echo "lb=$(echo "$LB_ARN" | sed 's#.*:loadbalancer/##')" >> "$GITHUB_OUTPUT"
+          TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn "$LB_ARN" \
+            --query 'TargetGroups[0].TargetGroupArn' --output text)
+          echo "tg=$(echo "$TG_ARN" | sed 's#.*:##')" >> "$GITHUB_OUTPUT"
+      - name: Deploy edge stack
+        working-directory: infra
+        run: |
+          npm ci
+          npx cdk deploy HomepageEdge --require-approval never \
+            -c account=${{ env.AWS_ACCOUNT_ID }} \
+            -c region=${{ env.AWS_REGION }} \
+            -c albDns='${{ needs.service.outputs.endpoint }}' \
+            -c domainName=${{ env.DOMAIN_NAME }} \
+            -c hostedZoneName=${{ env.HOSTED_ZONE_NAME }} \
+            -c serviceName=${{ env.SERVICE_NAME }} \
+            -c loadBalancerFullName='${{ steps.ids.outputs.lb }}' \
+            -c targetGroupFullName='${{ steps.ids.outputs.tg }}' \
+            -c ecsClusterName='${{ steps.ids.outputs.cluster }}' \
+            -c ecsServiceName='${{ steps.ids.outputs.service }}'
