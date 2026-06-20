@@ -4,6 +4,7 @@ import { SocialIcon } from "./components/social-icon";
 import { ProfileCarousel } from "./components/profile-carousel";
 import { IconTooltip } from "./components/icon-tooltip";
 import { TelegramModal } from "./components/telegram-modal";
+import { QrModal } from "./components/qr-modal";
 import {MapPinIcon} from '@heroicons/react/20/solid'
 import { SiApplemusic, SiLetterboxd } from 'react-icons/si'
 import packageJson from '../package.json'
@@ -16,6 +17,7 @@ export default async function Index() {
     <div className="relative flex flex-col min-h-screen pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="fixed inset-0 -z-10 bg-vertical md:bg-horizontal" aria-hidden="true" />
       <AmbientOverlay />
+      <QrModal />
       <div className="relative z-[2] flex flex-col flex-1 items-center mx-6 sm:mx-12 md:mx-24 text-center [text-shadow:_0_1px_4px_rgb(0_0_0_/_0.55)]">
         <ProfileCarousel />
         {/* Identity group: name hugs location */}
