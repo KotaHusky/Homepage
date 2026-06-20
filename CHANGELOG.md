@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/KotaHusky/Homepage/compare/v2.0.0...v2.1.0) (2026-06-20)
+
+
+### Features
+
+* **infra:** www.kota.dog -> apex (SAN cert + 301) ([#52](https://github.com/KotaHusky/Homepage/issues/52)) ([d3fb759](https://github.com/KotaHusky/Homepage/commit/d3fb7596cfe2d2808af7135de2c9628d016649bc))
+
 # [2.0.0](https://github.com/KotaHusky/Homepage/compare/v1.9.1...v2.0.0) (2026-06-20)
 
 
