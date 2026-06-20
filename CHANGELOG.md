@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/KotaHusky/Homepage/compare/v1.7.0...v1.7.1) (2026-06-20)
+
+
+### Bug Fixes
+
+* **docker:** exclude infra/ from image build context ([#43](https://github.com/KotaHusky/Homepage/issues/43)) ([01e5d44](https://github.com/KotaHusky/Homepage/commit/01e5d444d17688c643b0a0424a2848dbef84f6ab))
+
 # [1.7.0](https://github.com/KotaHusky/Homepage/compare/v1.6.0...v1.7.0) (2026-06-20)
 
 
