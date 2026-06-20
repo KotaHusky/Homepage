@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/KotaHusky/Homepage/compare/v2.1.0...v2.2.0) (2026-06-20)
+
+
+### Features
+
+* QR code modal, button-border fix (Tailwind v4), and footer/doc updates ([#51](https://github.com/KotaHusky/Homepage/issues/51)) ([044716b](https://github.com/KotaHusky/Homepage/commit/044716b6a893b3d41ca9f8a0d11e7efc0533f39d))
+
 # [2.1.0](https://github.com/KotaHusky/Homepage/compare/v2.0.0...v2.1.0) (2026-06-20)
 
 
