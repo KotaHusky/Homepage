@@ -33,10 +33,15 @@ const observability: ObservabilityProps | undefined = tier
   ? { tier, alarmEmail: ctx('alarmEmail'), ecsLogGroupName: ctx('ecsLogGroup') }
   : undefined;
 
-new EcsExpressEdgeStack(app, 'HomepageEdge', {
+// One stack per environment (HomepageEdgeProd / HomepageEdgeDev) -> one
+// CloudFront distribution each. The workflow passes -c stackName=<id>.
+const stackName = ctx('stackName') ?? 'HomepageEdge';
+
+new EcsExpressEdgeStack(app, stackName, {
   env: { account, region },
   albDnsName,
   domainName: ctx('domainName'),
+  certificateArn: ctx('certificateArn'),
   serviceName: ctx('serviceName') ?? 'homepage',
   observability,
   loadBalancerFullName: ctx('loadBalancerFullName'),

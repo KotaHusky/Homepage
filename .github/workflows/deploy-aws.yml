@@ -1,24 +1,29 @@
 name: Deploy (AWS / ECS Express)
 
-# App-specific deploy config lives HERE in the consuming workflow.
-# Pipeline: build image -> mirror to ECR -> ECS Express service -> CloudFront edge.
+# Deploys an environment (dev or prod) of Homepage:
+#   build image -> mirror to ECR -> ECS Express service -> CloudFront edge.
 #
-# Prerequisites (one-time, in the target AWS account):
-#   - OIDC deploy role            -> secret AWS_DEPLOY_ROLE_ARN
-#   - ECS task execution role     -> secret ECS_EXECUTION_ROLE_ARN
-#   - ECS infrastructure role     -> secret ECS_INFRASTRUCTURE_ROLE_ARN
-# DNS is on Cloudflare (no Route53). For a custom domain: import a us-east-1 ACM
-# cert via -c certificateArn=..., then add the Cloudflare records (CNAME ->
-# DistributionDomain) using the Cloudflare MCP server. See infra/README.aws.md.
-# Set AWS_ACCOUNT_ID as a repo variable, then uncomment the `push` trigger.
+# Environments:
+#   prod -> service `homepage`,     min-tasks 1, kota.dog,      obs tier prod
+#   dev  -> service `homepage-dev`, min-tasks 0 (scale-to-zero), dev.kota.dog, obs tier dev
+#
+# DNS is on Cloudflare (no Route53). ACM certs are pre-minted and imported via
+# the ACM_CERT_ARN_PROD / ACM_CERT_ARN_DEV repo variables; after first deploy,
+# add a Cloudflare CNAME <domain> -> <DistributionDomain> (use the Cloudflare
+# MCP server). See infra/README.aws.md.
+#
+# Prereqs (repo): vars AWS_ACCOUNT_ID, ACM_CERT_ARN_PROD, ACM_CERT_ARN_DEV;
+# secrets AWS_DEPLOY_ROLE_ARN, ECS_EXECUTION_ROLE_ARN, ECS_INFRASTRUCTURE_ROLE_ARN.
 
 on:
   workflow_dispatch:
     inputs:
-      custom_domain:
-        description: 'Deploy with the custom domain (ACM cert; Cloudflare DNS). Set false to smoke-test on the CloudFront URL only.'
-        type: boolean
-        default: true
+      environment:
+        description: 'Which environment to deploy'
+        type: choice
+        options: [dev, prod]
+        default: dev
+  # push to main deploys prod (enable once verified):
   # push:
   #   branches: [main]
   #   paths-ignore: ['*.md', 'LICENSE', 'docs/**']
@@ -31,16 +36,39 @@ permissions:
 env:
   AWS_REGION: us-east-1
   AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
-  SERVICE_NAME: homepage
-  CONTAINER_PORT: '3000'
-  HEALTH_CHECK_PATH: /api/health
-  DOMAIN_NAME: kota.dog
-  # Observability tier for the edge stack: dev (dashboard only) or prod
-  # (dashboard + alarms + access logs + 90d retention). Flip to prod after cutover.
-  OBSERVABILITY_TIER: dev
+  APP: homepage
 
 jobs:
-  # 1. Build the Next.js standalone image and push to GHCR.
+  # 0. Derive per-environment config (push to main => prod).
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.c.outputs.env }}
+      service: ${{ steps.c.outputs.service }}
+      min_tasks: ${{ steps.c.outputs.min_tasks }}
+      domain: ${{ steps.c.outputs.domain }}
+      obs_tier: ${{ steps.c.outputs.obs_tier }}
+      stack: ${{ steps.c.outputs.stack }}
+      cert_arn: ${{ steps.c.outputs.cert_arn }}
+    steps:
+      - id: c
+        run: |
+          ENV="${{ github.event.inputs.environment || 'prod' }}"
+          if [ "$ENV" = "prod" ]; then
+            {
+              echo "env=prod"; echo "service=homepage"; echo "min_tasks=1"
+              echo "domain=kota.dog"; echo "obs_tier=prod"; echo "stack=HomepageEdgeProd"
+              echo "cert_arn=${{ vars.ACM_CERT_ARN_PROD }}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "env=dev"; echo "service=homepage-dev"; echo "min_tasks=0"
+              echo "domain=dev.kota.dog"; echo "obs_tier=dev"; echo "stack=HomepageEdgeDev"
+              echo "cert_arn=${{ vars.ACM_CERT_ARN_DEV }}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+  # 1. Build the Next.js standalone image (shared across envs) and push to GHCR.
   image:
     uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
     with:
@@ -49,9 +77,9 @@ jobs:
       contents: read
       packages: write
 
-  # 2. Mirror the GHCR image into a private ECR repo.
+  # 2. Mirror the GHCR image into the shared private ECR repo.
   mirror:
-    needs: image
+    needs: [config, image]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -67,30 +95,30 @@ jobs:
       - id: mirror
         uses: KotaHusky/cicd-toolkit/actions/ecr-mirror@v2
         with:
-          source-image: ghcr.io/kotahusky/${{ env.SERVICE_NAME }}@${{ needs.image.outputs.digest }}
-          ecr-repo: ${{ env.SERVICE_NAME }}
+          source-image: ghcr.io/kotahusky/${{ env.APP }}@${{ needs.image.outputs.digest }}
+          ecr-repo: ${{ env.APP }}
           ecr-tag: ${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
 
-  # 3. Deploy the ECS Express service (auto-provisions Fargate + ALB).
+  # 3. Deploy the ECS Express service for this environment.
   service:
-    needs: mirror
+    needs: [config, mirror]
     uses: KotaHusky/cicd-toolkit/.github/workflows/ecs-express-deploy.yml@main
     with:
-      service-name: homepage
+      service-name: ${{ needs.config.outputs.service }}
       image: ${{ needs.mirror.outputs.ecr-image }}
       aws-region: us-east-1
       container-port: 3000
       health-check-path: /api/health
+      min-task-count: ${{ fromJSON(needs.config.outputs.min_tasks) }}
     secrets:
       role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
       execution-role-arn: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
       infrastructure-role-arn: ${{ secrets.ECS_INFRASTRUCTURE_ROLE_ARN }}
 
-  # 4. Deploy the CloudFront edge + dashboard (inlined: cdk-deploy.yml runs at
-  #    repo root, but our CDK app lives in infra/).
+  # 4. Deploy the CloudFront edge + observability for this environment.
   edge:
-    needs: service
+    needs: [config, service]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -107,53 +135,39 @@ jobs:
       - name: Resolve ALB + ECS identifiers for the dashboard (best-effort)
         id: ids
         shell: bash
+        env:
+          SVC: ${{ needs.config.outputs.service }}
         run: |
-          # Best-effort: never fail the deploy if identifiers can't be resolved
-          # (edge still deploys; ALB/ECS dashboard widgets just degrade).
           SERVICE_ARN='${{ needs.service.outputs.service-arn }}'
-          # arn:aws:ecs:region:acct:service/<cluster>/<service>
           echo "cluster=$(echo "$SERVICE_ARN" | awk -F'/' '{print $2}')" >> "$GITHUB_OUTPUT"
           echo "service=$(echo "$SERVICE_ARN" | awk -F'/' '{print $3}')" >> "$GITHUB_OUTPUT"
-          # ECS Express uses a shared gateway ALB named ecs-express-gateway-alb-*
           LB_ARN=$(aws elbv2 describe-load-balancers \
             --query "LoadBalancers[?starts_with(LoadBalancerName,'ecs-express-gateway')].LoadBalancerArn | [0]" \
             --output text 2>/dev/null || true)
           if [ -n "$LB_ARN" ] && [ "$LB_ARN" != "None" ]; then
             echo "lb=$(echo "$LB_ARN" | sed 's#.*:loadbalancer/##')" >> "$GITHUB_OUTPUT"
             TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn "$LB_ARN" \
-              --query "TargetGroups[?contains(TargetGroupName,'${SERVICE_NAME}')].TargetGroupArn | [0]" \
+              --query "TargetGroups[?contains(TargetGroupName,'${SVC}')].TargetGroupArn | [0]" \
               --output text 2>/dev/null || true)
-            if [ -z "$TG_ARN" ] || [ "$TG_ARN" = "None" ]; then
-              TG_ARN=$(aws elbv2 describe-target-groups --load-balancer-arn "$LB_ARN" \
-                --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || true)
-            fi
             if [ -n "$TG_ARN" ] && [ "$TG_ARN" != "None" ]; then
               echo "tg=$(echo "$TG_ARN" | sed 's#.*:##')" >> "$GITHUB_OUTPUT"
             fi
           else
             echo "::warning::ECS Express gateway ALB not found; dashboard ALB widgets skipped"
           fi
-      - name: Deploy edge stack
+      - name: Deploy edge stack (${{ needs.config.outputs.env }})
         working-directory: infra
-        env:
-          USE_DOMAIN: ${{ inputs.custom_domain }}
         run: |
           npm ci
-          DOMAIN_FLAGS=""
-          if [ "${USE_DOMAIN:-true}" = "true" ]; then
-            DOMAIN_FLAGS="-c domainName=${{ env.DOMAIN_NAME }}"
-          else
-            echo "::notice::Deploying edge WITHOUT custom domain (CloudFront URL only)"
-          fi
-          # CloudFront origin is the per-service .on.aws endpoint (the gateway
-          # routes by that hostname). observabilityTier enables dashboard/alarms.
-          npx cdk deploy HomepageEdge --require-approval never \
+          npx cdk deploy ${{ needs.config.outputs.stack }} --require-approval never \
             -c account=${{ env.AWS_ACCOUNT_ID }} \
             -c region=${{ env.AWS_REGION }} \
+            -c stackName=${{ needs.config.outputs.stack }} \
             -c albDns='${{ needs.service.outputs.endpoint }}' \
-            -c observabilityTier=${{ env.OBSERVABILITY_TIER }} \
-            $DOMAIN_FLAGS \
-            -c serviceName=${{ env.SERVICE_NAME }} \
+            -c domainName=${{ needs.config.outputs.domain }} \
+            -c certificateArn=${{ needs.config.outputs.cert_arn }} \
+            -c observabilityTier=${{ needs.config.outputs.obs_tier }} \
+            -c serviceName=${{ needs.config.outputs.service }} \
             -c loadBalancerFullName='${{ steps.ids.outputs.lb }}' \
             -c targetGroupFullName='${{ steps.ids.outputs.tg }}' \
             -c ecsClusterName='${{ steps.ids.outputs.cluster }}' \
