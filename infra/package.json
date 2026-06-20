@@ -1,0 +1,21 @@
+{
+  "name": "homepage-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CDK edge stack (CloudFront + ACM + Route53 + dashboard) for the Homepage ECS Express deployment",
+  "scripts": {
+    "cdk": "cdk",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.178.0",
+    "constructs": "^10.4.2",
+    "cicd-toolkit": "github:KotaHusky/cicd-toolkit#feat/ecs-express-edge"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.14",
+    "aws-cdk": "^2.178.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
