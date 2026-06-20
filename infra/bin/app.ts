@@ -43,6 +43,9 @@ new EcsExpressEdgeStack(app, stackName, {
   domainName: ctx('domainName'),
   certificateArn: ctx('certificateArn'),
   serviceName: ctx('serviceName') ?? 'homepage',
+  // Dashboard names are account-global; key to the stack so dev/prod and any
+  // legacy stacks never collide.
+  dashboardName: ctx('dashboardName') ?? stackName,
   observability,
   loadBalancerFullName: ctx('loadBalancerFullName'),
   targetGroupFullName: ctx('targetGroupFullName'),
