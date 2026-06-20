@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "aws-cdk-lib": "^2.178.0",
-    "cicd-toolkit": "github:KotaHusky/cicd-toolkit#v2.3.0",
+    "cicd-toolkit": "github:KotaHusky/cicd-toolkit#v2.4.0",
     "constructs": "^10.4.2"
   },
   "devDependencies": {

@@ -68,6 +68,22 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
+  # 0b. Detect whether the edge (infra/) changed. On push, the slow CloudFront
+  #     edge job is skipped unless infra/ changed; dispatch always runs it.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.f.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - '.github/workflows/deploy-aws.yml'
+
   # 1. Build the Next.js standalone image (shared across envs) and push to GHCR.
   image:
     uses: KotaHusky/cicd-toolkit/.github/workflows/docker-ghcr.yml@main
@@ -117,8 +133,13 @@ jobs:
       infrastructure-role-arn: ${{ secrets.ECS_INFRASTRUCTURE_ROLE_ARN }}
 
   # 4. Deploy the CloudFront edge + observability for this environment.
+  #    Skipped on push when infra/ is unchanged (CloudFront is the slow step);
+  #    always runs on manual dispatch.
   edge:
-    needs: [config, service]
+    needs: [config, service, changes]
+    if: >-
+      always() && needs.service.result == 'success' &&
+      (github.event_name == 'workflow_dispatch' || needs.changes.outputs.infra == 'true')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -155,10 +176,15 @@ jobs:
           else
             echo "::warning::ECS Express gateway ALB not found; dashboard ALB widgets skipped"
           fi
+      - name: Cache infra node_modules (rebuilds the cicd-toolkit git dep)
+        uses: actions/cache@v4
+        with:
+          path: infra/node_modules
+          key: infra-nm-${{ runner.os }}-${{ hashFiles('infra/package-lock.json') }}
       - name: Deploy edge stack (${{ needs.config.outputs.env }})
         working-directory: infra
         run: |
-          npm ci
+          npm ci --prefer-offline
           npx cdk deploy ${{ needs.config.outputs.stack }} --require-approval never \
             -c account=${{ env.AWS_ACCOUNT_ID }} \
             -c region=${{ env.AWS_REGION }} \
@@ -168,6 +194,7 @@ jobs:
             -c certificateArn=${{ needs.config.outputs.cert_arn }} \
             -c observabilityTier=${{ needs.config.outputs.obs_tier }} \
             -c serviceName=${{ needs.config.outputs.service }} \
+            -c dashboardName=${{ needs.config.outputs.stack }} \
             -c loadBalancerFullName='${{ steps.ids.outputs.lb }}' \
             -c targetGroupFullName='${{ steps.ids.outputs.tg }}' \
             -c ecsClusterName='${{ steps.ids.outputs.cluster }}' \
