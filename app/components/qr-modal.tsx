@@ -28,7 +28,7 @@ export function QrModal() {
       <button
         onClick={() => setIsOpen(true)}
         aria-label="Show QR code for this page"
-        className="fixed z-30 top-[max(1rem,env(safe-area-inset-top))] right-[max(1rem,env(safe-area-inset-right))] flex h-10 w-10 items-center justify-center rounded-md border border-solid border-white/15 bg-white/10 text-white backdrop-blur-md shadow-lg transition duration-200 hover:bg-blue-500/30 hover:border-blue-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        className="fixed z-30 bottom-[max(1rem,env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] flex h-10 w-10 items-center justify-center rounded-md border border-solid border-white/15 bg-white/10 text-white backdrop-blur-md shadow-lg transition duration-200 hover:bg-blue-500/30 hover:border-blue-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
       >
         <i className="fa-solid fa-qrcode text-lg" aria-hidden="true"></i>
       </button>
