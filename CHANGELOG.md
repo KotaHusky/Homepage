@@ -1,3 +1,10 @@
+## [1.7.2](https://github.com/KotaHusky/Homepage/compare/v1.7.1...v1.7.2) (2026-06-20)
+
+
+### Bug Fixes
+
+* **ci:** lowercase GHCR source-image ref ([#44](https://github.com/KotaHusky/Homepage/issues/44)) ([b3c6005](https://github.com/KotaHusky/Homepage/commit/b3c600571e43b93a03ab66d998458cf47909499b))
+
 ## [1.7.1](https://github.com/KotaHusky/Homepage/compare/v1.7.0...v1.7.1) (2026-06-20)
 
 
