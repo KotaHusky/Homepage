@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/KotaHusky/Homepage/compare/v1.5.1...v1.6.0) (2026-06-20)
+
+
+### Features
+
+* **infra:** ECS Express edge stack + AWS deploy workflow ([#40](https://github.com/KotaHusky/Homepage/issues/40)) ([99eed13](https://github.com/KotaHusky/Homepage/commit/99eed13b1c706175475c154ec1b6e0a642f0b8ab)), closes [cicd-toolkit#29](https://github.com/cicd-toolkit/issues/29)
+
 ## [1.5.1](https://github.com/KotaHusky/Homepage/compare/v1.5.0...v1.5.1) (2026-02-22)
 
 
