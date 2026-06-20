@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/KotaHusky/Homepage/compare/v1.8.0...v1.8.1) (2026-06-20)
+
+
+### Bug Fixes
+
+* **infra:** v2.3.0 HTTPS origin + Cloudflare DNS ([#46](https://github.com/KotaHusky/Homepage/issues/46)) ([4e44a06](https://github.com/KotaHusky/Homepage/commit/4e44a064ccbafe249f05047744b7753a0320484a))
+
 # [1.8.0](https://github.com/KotaHusky/Homepage/compare/v1.7.2...v1.8.0) (2026-06-20)
 
 
