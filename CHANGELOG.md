@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/KotaHusky/Homepage/compare/v1.6.0...v1.7.0) (2026-06-20)
+
+
+### Features
+
+* **ci:** custom_domain toggle for CloudFront-only smoke deploys ([#42](https://github.com/KotaHusky/Homepage/issues/42)) ([212fab5](https://github.com/KotaHusky/Homepage/commit/212fab52268f5b0591e0389684daddeb3302f1dc))
+
 # [1.6.0](https://github.com/KotaHusky/Homepage/compare/v1.5.1...v1.6.0) (2026-06-20)
 
 
