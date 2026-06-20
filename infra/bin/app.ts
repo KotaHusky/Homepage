@@ -4,13 +4,13 @@
  *
  * The ECS Express service + ALB are created by the deploy workflow
  * (`.github/workflows/deploy-aws.yml`). This CDK app only owns the edge:
- * CloudFront + ACM + Route53 + a CloudWatch dashboard, via the shared
- * `EcsExpressEdgeStack` from cicd-toolkit.
+ * CloudFront + ACM + optional CloudWatch observability, via the shared
+ * `EcsExpressEdgeStack` from cicd-toolkit. DNS is on Cloudflare (no Route53).
  *
  * All config is supplied as CDK context by the workflow (-c key=value), so the
  * account/domain/service live in the consuming workflow, not here:
  *   account, region, albDns (required),
- *   domainName, hostedZoneName, serviceName (custom domain),
+ *   domainName, serviceName (custom domain; DNS on Cloudflare),
  *   loadBalancerFullName, targetGroupFullName, ecsClusterName, ecsServiceName
  *   (dashboard detail).
  */
@@ -37,7 +37,6 @@ new EcsExpressEdgeStack(app, 'HomepageEdge', {
   env: { account, region },
   albDnsName,
   domainName: ctx('domainName'),
-  hostedZoneName: ctx('hostedZoneName'),
   serviceName: ctx('serviceName') ?? 'homepage',
   observability,
   loadBalancerFullName: ctx('loadBalancerFullName'),
