@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/KotaHusky/Homepage/compare/v1.8.1...v1.9.0) (2026-06-20)
+
+
+### Features
+
+* **deploy:** dev + prod ECS Express environments ([#47](https://github.com/KotaHusky/Homepage/issues/47)) ([8c87f37](https://github.com/KotaHusky/Homepage/commit/8c87f379a7cc0956d7d11f5412847ee0199bee0a))
+
 ## [1.8.1](https://github.com/KotaHusky/Homepage/compare/v1.8.0...v1.8.1) (2026-06-20)
 
 
