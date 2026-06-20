@@ -49,20 +49,24 @@
 - `public/images/` — Static images (profile photos, backgrounds)
 
 ### Tech Stack
-- **Framework**: Next.js 15 (App Router, `output: 'standalone'`)
+- **Framework**: Next.js 16 (App Router, `output: 'standalone'`, Turbopack dev)
 - **React**: 19
-- **Styling**: Tailwind CSS 3 (glassmorphism, edge-to-edge `viewport-fit: cover`)
+- **Styling**: Tailwind CSS 4 (CSS-first `@import 'tailwindcss'` + `@utility`; glassmorphism, edge-to-edge `viewport-fit: cover`). Note: in v4 `.border` needs an explicit `border-solid` to render under Turbopack dev.
 - **Icons**: `@heroicons/react`, FontAwesome (CDN), `react-icons` (Simple Icons)
-- **Background FX**: `@nauverse/react-aurora-background` (overrides React 19 peer)
-- **Accessibility**: focus-visible rings, `prefers-reduced-motion`, ARIA dialog/labels
-- **Testing**: Vitest + React Testing Library + jsdom
-- **Node**: Requires >= 20 (use `nvm use 20`)
+- **Background FX**: `@nauverse/react-aurora-background` (overrides React 19 peer; `numBubbles` max is 9)
+- **Accessibility**: focus-visible rings, `prefers-reduced-motion` (via `app/lib/media.ts`), ARIA dialog/labels
+- **Lint**: ESLint 9 flat config (`eslint.config.mjs`, `eslint-config-next/core-web-vitals`)
+- **Testing**: Vitest 4 + React Testing Library + jsdom
+- **Node**: Requires >= 24 (use `nvm use 24`)
+
+### Deployment
+- Hosted on AWS **ECS Express** (Fargate) + **CloudFront** in `us-east-1`; DNS on Cloudflare (DNS-only) → `kota.dog`. Edge infra is AWS CDK in `infra/` (see `infra/README.aws.md`). Push to `main` runs release + deploy via `.github/workflows/`.
 
 ### Commands
-- `npm run dev` — Dev server (only on branches with the script; otherwise `npx next dev`)
+- `npm run dev` — Dev server (Turbopack, hot reload)
 - `npm run build` — Production build
 - `npm run test` — Run tests (Vitest)
-- `npm run lint` — ESLint
+- `npm run lint` — ESLint (flat config)
 
 ## Exploration Guidelines
 - **Prefer Glob/Grep directly** over spawning Explore agents for targeted searches

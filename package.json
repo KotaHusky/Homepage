@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "serve": "npx next start",
-    "serve:static-export": "next build && next export && npx serve@latest out -l 3000",
     "build": "next build",
     "lint": "eslint .",
     "start": "npx next start",
@@ -22,6 +21,7 @@
     "@heroicons/react": "^2.2.0",
     "@nauverse/react-aurora-background": "^1.0.12",
     "next": "^16.2.9",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-icons": "^5.6.0",

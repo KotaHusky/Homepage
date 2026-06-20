@@ -4,6 +4,7 @@ import { SocialIcon } from "./components/social-icon";
 import { ProfileCarousel } from "./components/profile-carousel";
 import { IconTooltip } from "./components/icon-tooltip";
 import { TelegramModal } from "./components/telegram-modal";
+import { QrModal } from "./components/qr-modal";
 import {MapPinIcon} from '@heroicons/react/20/solid'
 import { SiApplemusic, SiLetterboxd } from 'react-icons/si'
 import packageJson from '../package.json'
@@ -16,6 +17,7 @@ export default async function Index() {
     <div className="relative flex flex-col min-h-screen pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="fixed inset-0 -z-10 bg-vertical md:bg-horizontal" aria-hidden="true" />
       <AmbientOverlay />
+      <QrModal />
       <div className="relative z-[2] flex flex-col flex-1 items-center mx-6 sm:mx-12 md:mx-24 text-center [text-shadow:_0_1px_4px_rgb(0_0_0_/_0.55)]">
         <ProfileCarousel />
         {/* Identity group: name hugs location */}
@@ -76,9 +78,21 @@ export default async function Index() {
         </div>
       </div>
       <footer className="relative z-[2] pb-3 pt-4 text-center text-sm text-gray-400 space-y-1">
-        <p>Made with <span className="text-xs">♥</span> by Kota Husky in NH</p>
+        <p>
+          <a href="https://github.com/KotaHusky/Homepage" target="_blank" rel="noreferrer" className="hover:text-gray-300 transition-colors">
+            Made with <span className="text-xs">♥</span> by Kota Husky in NH
+          </a>
+        </p>
         <p><a href="https://github.com/KotaHusky/Homepage/blob/main/LICENSE" target="_blank" rel="noreferrer" className="hover:text-gray-300 underline decoration-gray-500/50">MIT License</a></p>
-        <p>{process.env.NODE_ENV === 'production' ? `v${packageJson.version}` : 'local'}</p>
+        <p>
+          {process.env.NODE_ENV === 'production' ? (
+            <a href={`https://github.com/KotaHusky/Homepage/releases/tag/v${packageJson.version}`} target="_blank" rel="noreferrer" className="hover:text-gray-300 transition-colors">
+              v{packageJson.version}
+            </a>
+          ) : (
+            'local'
+          )}
+        </p>
       </footer>
     </div>
   );
