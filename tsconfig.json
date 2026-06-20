@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "jsx": "preserve",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "allowJs": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,

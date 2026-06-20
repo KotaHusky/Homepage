@@ -1,9 +1,18 @@
+import type { Viewport } from 'next'
 import Script from 'next/script'
 import './global.css';
 
 export const metadata = {
   title: 'Kota Husky',
   description: 'Event and portrait photographer | Convention and community event organizer | Founder of Barks & Rec',
+};
+
+export const viewport: Viewport = {
+  // Paint edge-to-edge under the browser chrome / safe areas so the
+  // translucent toolbar blurs the page background instead of a solid bar.
+  // NOTE: intentionally no `themeColor` — setting one forces a solid bar and
+  // disables the adaptive glass/blur effect in Safari & Chrome.
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({

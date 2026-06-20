@@ -1,6 +1,15 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+html,
+body {
+  height: 100%;
+}
+
+/* Dark base on html only (not body) so overscroll bounce never flashes white,
+   while keeping body transparent so the fixed -z-10 photo layer stays visible. */
+html {
+  background-color: #0a1020;
+}
 
 body {
   font-family: 'futura-pt', sans-serif;
@@ -9,19 +18,21 @@ body {
 
 /**
  * Utility classes for background images with horizontal and vertical gradients.
+ * Defined with Tailwind v4 `@utility` so responsive variants (e.g. md:bg-horizontal)
+ * still work. Applied to a position:fixed layer (see page.tsx) so the image stays
+ * pinned to the viewport without the scroll wiggle that `background-attachment: fixed`
+ * causes.
 */
-@layer utilities {
-  .bg-horizontal {
-    background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.webp');
-    background-size: cover;
-    background-repeat: repeat-y;
-    background-attachment: fixed;
-  }
+@utility bg-horizontal {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
 
-  .bg-vertical {
-    background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.webp');
-    background-size: cover;
-    background-repeat: repeat-y;
-    background-attachment: fixed;
-  }
+@utility bg-vertical {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }

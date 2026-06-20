@@ -10,12 +10,13 @@ export function HomepageButton(props: HomepageButtonProps) {
   const { buttonText, className, href } = props;
 
   return (
-    <a href={href} target="_blank" rel="noreferrer">
-      <button
-        className={`bg-gray-800 hover:bg-blue-500 text-white font-bold py-2 px-4 w-full min-w-[100px] max-w-[200px] mb-4 rounded ${className}`}
-      >
-        {buttonText}
-      </button>
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className={`block text-center bg-white/10 hover:bg-blue-500/30 text-white font-bold py-2 px-4 w-full min-w-[100px] max-w-[200px] mb-4 rounded border border-white/15 hover:border-blue-400/40 backdrop-blur-md shadow-lg transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${className ?? ''}`}
+    >
+      {buttonText}
     </a>
   );
 }
