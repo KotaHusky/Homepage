@@ -45,6 +45,7 @@ jobs:
       dev-cert-arn: ${{ vars.ACM_CERT_ARN_DEV }}
       aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
       environment: ${{ github.event.inputs.environment }}
+      prod-additional-aliases: www.kota.dog
     secrets:
       role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
       execution-role-arn: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}

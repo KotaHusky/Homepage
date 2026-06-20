@@ -42,6 +42,7 @@ new EcsExpressEdgeStack(app, stackName, {
   albDnsName,
   domainName: ctx('domainName'),
   certificateArn: ctx('certificateArn'),
+  additionalAliases: ctx('additionalAliases')?.split(',').map((s) => s.trim()).filter(Boolean),
   serviceName: ctx('serviceName') ?? 'homepage',
   // Dashboard names are account-global; key to the stack so dev/prod and any
   // legacy stacks never collide.
