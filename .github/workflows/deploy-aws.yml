@@ -63,7 +63,7 @@ jobs:
       - id: mirror
         uses: KotaHusky/cicd-toolkit/actions/ecr-mirror@v2
         with:
-          source-image: ghcr.io/${{ github.repository }}@${{ needs.image.outputs.digest }}
+          source-image: ghcr.io/kotahusky/${{ env.SERVICE_NAME }}@${{ needs.image.outputs.digest }}
           ecr-repo: ${{ env.SERVICE_NAME }}
           ecr-tag: ${{ github.sha }}
           aws-region: ${{ env.AWS_REGION }}
