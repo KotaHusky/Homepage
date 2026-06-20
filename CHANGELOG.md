@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/KotaHusky/Homepage/compare/v1.9.0...v1.9.1) (2026-06-20)
+
+
+### Performance Improvements
+
+* **ci:** build caching + conditional edge; fix dashboard name collision ([#48](https://github.com/KotaHusky/Homepage/issues/48)) ([bfd0b50](https://github.com/KotaHusky/Homepage/commit/bfd0b5014c41e4a7dd519225f7db05404aa5495e))
+
 # [1.9.0](https://github.com/KotaHusky/Homepage/compare/v1.8.1...v1.9.0) (2026-06-20)
 
 
