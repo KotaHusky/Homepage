@@ -39,7 +39,7 @@ export function TelegramModal() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="telegram-modal-title"
-            className="relative mx-4 max-w-md rounded-xl bg-gray-900 border border-gray-700 p-6 text-left shadow-2xl"
+            className="relative mx-4 max-w-md rounded-xl bg-gray-900 border border-solid border-gray-700 p-6 text-left shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <button
