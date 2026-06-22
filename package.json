@@ -1,6 +1,6 @@
 {
   "name": "homepage",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "license": "MIT",
   "scripts": {
     "dev": "next dev",

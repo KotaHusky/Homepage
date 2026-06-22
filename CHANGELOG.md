@@ -1,3 +1,10 @@
+## [2.2.2](https://github.com/KotaHusky/Homepage/compare/v2.2.1...v2.2.2) (2026-06-22)
+
+
+### Bug Fixes
+
+* **infra:** toolkit v2.5.2 — repair /_next/image ([6d310e9](https://github.com/KotaHusky/Homepage/commit/6d310e974a1c29c66431ab6fc9ae4ae000331c78))
+
 ## [2.2.1](https://github.com/KotaHusky/Homepage/compare/v2.2.0...v2.2.1) (2026-06-22)
 
 
