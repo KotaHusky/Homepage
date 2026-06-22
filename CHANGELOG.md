@@ -1,3 +1,10 @@
+## [2.2.1](https://github.com/KotaHusky/Homepage/compare/v2.2.0...v2.2.1) (2026-06-22)
+
+
+### Bug Fixes
+
+* visible button outlines + no-cache edge policy (v2.5.1) ([ff5036a](https://github.com/KotaHusky/Homepage/commit/ff5036a8776aa65c58583a0825b018b0ce496433))
+
 # [2.2.0](https://github.com/KotaHusky/Homepage/compare/v2.1.0...v2.2.0) (2026-06-20)
 
 
