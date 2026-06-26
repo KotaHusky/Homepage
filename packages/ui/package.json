@@ -1,6 +1,6 @@
 {
   "name": "@kotahusky/ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Shared, themeable UI — styles + components for the KotaHusky homepage apps.",
   "license": "MIT",
   "private": false,
