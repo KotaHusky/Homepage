@@ -1,3 +1,10 @@
+## [2.3.1](https://github.com/KotaHusky/Homepage/compare/v2.3.0...v2.3.1) (2026-06-26)
+
+
+### Bug Fixes
+
+* **docker:** keep tsconfig.base.json in build context for monorepo build ([#56](https://github.com/KotaHusky/Homepage/issues/56)) ([819d8be](https://github.com/KotaHusky/Homepage/commit/819d8be56aee76448706efb5dc1b7ea56310257b)), closes [#55](https://github.com/KotaHusky/Homepage/issues/55)
+
 # [2.3.0](https://github.com/KotaHusky/Homepage/compare/v2.2.2...v2.3.0) (2026-06-26)
 
 
