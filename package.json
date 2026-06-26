@@ -49,6 +49,7 @@
     "postcss": "^8.5.15",
     "prettier": "^3.8.4",
     "semantic-release": "^25.0.5",
+    "semantic-release-monorepo": "^8.0.2",
     "tailwindcss": "^4.3.1",
     "ts-node": "^10.9.2",
     "turbo": "^2.9.18",
