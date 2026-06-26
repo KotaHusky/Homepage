@@ -1,0 +1,47 @@
+name: Release @kotahusky/ui
+
+# Publishes packages/ui to GitHub Packages when its source changes on main.
+# `semantic-release-monorepo` scopes commit analysis to packages/ui, so app
+# commits don't version the package and vice-versa.
+#
+# First release: semantic-release starts a fresh package at 1.0.0. To start at
+# 0.x instead, seed it manually BEFORE this runs (from the repo root):
+#   npm publish -w @kotahusky/ui            # publishes the current 0.1.0
+#   git tag @kotahusky/ui-v0.1.0 && git push origin @kotahusky/ui-v0.1.0
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/ui/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-ui-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-ui:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+      - run: npm ci
+      - name: semantic-release (packages/ui)
+        working-directory: packages/ui
+        run: npx semantic-release -e semantic-release-monorepo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
