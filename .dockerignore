@@ -9,6 +9,8 @@ e2e
 .prettierrc*
 jest.config*
 vitest.config*
-tsconfig*.json
+# Do NOT ignore tsconfig*.json: apps/web/tsconfig.json extends the root
+# tsconfig.base.json, which must be present in the Docker build context or
+# `next build` fails to resolve the extends chain.
 infra
 cdk.out
