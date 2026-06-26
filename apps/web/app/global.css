@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+@import '@kotahusky/ui/styles.css';
+
+/* Tailwind v4 skips node_modules during source detection, so point it at the
+   shared package's source — otherwise the brand-* / text-shadow-soft utilities
+   used inside @kotahusky/ui components never get generated. */
+@source '../../../packages/ui/src';
+
+/* kota.dog brand = blue. The package ships a neutral default; each app pins its
+   own palette here (afterdark pins red). This is the only per-app color change. */
+@theme {
+  --color-brand-50: var(--color-blue-50);
+  --color-brand-100: var(--color-blue-100);
+  --color-brand-200: var(--color-blue-200);
+  --color-brand-300: var(--color-blue-300);
+  --color-brand-400: var(--color-blue-400);
+  --color-brand-500: var(--color-blue-500);
+  --color-brand-600: var(--color-blue-600);
+  --color-brand-700: var(--color-blue-700);
+  --color-brand-800: var(--color-blue-800);
+  --color-brand-900: var(--color-blue-900);
+  --color-brand-950: var(--color-blue-950);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* Dark base on html only (not body) so overscroll bounce never flashes white,
+   while keeping body transparent so the fixed -z-10 photo layer stays visible. */
+html {
+  background-color: #0a1020;
+}
+
+body {
+  font-family: 'futura-pt', sans-serif;
+  color: white;
+}
+
+/**
+ * Background-image utilities (app-specific art, so they stay in the app rather
+ * than the shared package). Tailwind v4 `@utility` so responsive variants
+ * (e.g. md:bg-horizontal) still work; applied to a position:fixed layer.
+*/
+@utility bg-horizontal {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-horizontal.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+@utility bg-vertical {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url('/images/background-vertical.webp');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}

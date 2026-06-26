@@ -1,0 +1,41 @@
+/**
+ * @kotahusky/ui base theme — shared design tokens for the KotaHusky web apps.
+ *
+ * Usage (per app global.css):
+ *   @import 'tailwindcss';
+ *   @import '@kotahusky/ui/styles.css';
+ *   @source '<path to @kotahusky/ui src>';   // REQUIRED: Tailwind v4 skips node_modules,
+ *                                             // so the brand-* classes used inside the
+ *                                             // package only get generated if you point
+ *                                             // @source at its source.
+ *   @theme {                                  // recolor here — the only per-app override
+ *     --color-brand-50:  var(--color-red-50);
+ *     ...
+ *     --color-brand-950: var(--color-red-950);
+ *   }
+ *
+ * Components in this package reference brand-* and text-shadow-soft ONLY — never a
+ * literal color like red-* / blue-*. That is what makes an app a one-block recolor.
+ */
+@theme {
+  --font-sans: 'futura-pt', sans-serif;
+
+  /* Em-relative drop shadow: scales subtly with the element it sits on, so small
+     body text and large icon glyphs get the same proportional depth. Generates a
+     `text-shadow-soft` utility (Tailwind v4 --text-shadow-* namespace). */
+  --text-shadow-soft: 0 0.04em 0.12em rgb(0 0 0 / 0.5);
+
+  /* Semantic brand scale. Neutral default = Tailwind blue; each app overrides
+     these to its own palette. Components use bg-brand-500/20, text-brand-400, etc. */
+  --color-brand-50: var(--color-blue-50);
+  --color-brand-100: var(--color-blue-100);
+  --color-brand-200: var(--color-blue-200);
+  --color-brand-300: var(--color-blue-300);
+  --color-brand-400: var(--color-blue-400);
+  --color-brand-500: var(--color-blue-500);
+  --color-brand-600: var(--color-blue-600);
+  --color-brand-700: var(--color-blue-700);
+  --color-brand-800: var(--color-blue-800);
+  --color-brand-900: var(--color-blue-900);
+  --color-brand-950: var(--color-blue-950);
+}

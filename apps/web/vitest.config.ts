@@ -7,5 +7,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
+    // Component tests now live in @kotahusky/ui; the app has no unit tests yet.
+    passWithNoTests: true,
   },
 });

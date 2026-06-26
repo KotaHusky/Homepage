@@ -9,7 +9,7 @@ export interface SocialIconProps {
 export function SocialIcon(props: SocialIconProps) {
   return (
     <a
-      className="rounded-sm transition-colors duration-200 ease-in-out hover:text-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+      className="rounded-sm transition-colors duration-200 ease-in-out hover:text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
       href={props.href}
       target="_blank"
       rel="noreferrer"
