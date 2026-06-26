@@ -72,7 +72,7 @@ export function ProfileCarousel({
     >
       <button
         onClick={() => handleArrowClick(-1)}
-        className="rounded-full text-gray-400 hover:text-white transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        className="rounded-full text-brand-400/60 hover:text-brand-300 transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         aria-label="Previous photo"
       >
         <ChevronLeftIcon className="w-6 h-6 md:w-8 md:h-8" />
@@ -86,10 +86,12 @@ export function ProfileCarousel({
           return (
             <div
               key={img.alt}
-              className="absolute top-1/2 left-1/2 w-32 h-32 md:w-64 md:h-64 rounded-full overflow-hidden transition-all duration-700 ease-in-out"
+              className="absolute top-1/2 left-1/2 w-32 h-32 md:w-64 md:h-64 rounded-full overflow-hidden border border-brand-700/70 transition-all duration-700 ease-in-out"
               style={{
+                // Inline opacity (not an `opacity-*` class) so it actually wins —
+                // a Tailwind class here would be overridden by this inline style.
                 transform: `translate(-50%, -50%) translateX(${offset * 85}%) scale(${isCenter ? 1 : 0.5})`,
-                opacity: 1,
+                opacity: 0.9,
                 zIndex: isCenter ? 10 : 0,
               }}
             >
@@ -109,7 +111,7 @@ export function ProfileCarousel({
 
       <button
         onClick={() => handleArrowClick(1)}
-        className="rounded-full text-gray-400 hover:text-white transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+        className="rounded-full text-brand-400/60 hover:text-brand-300 transition-colors p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
         aria-label="Next photo"
       >
         <ChevronRightIcon className="w-6 h-6 md:w-8 md:h-8" />
