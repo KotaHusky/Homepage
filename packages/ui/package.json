@@ -23,7 +23,6 @@
     "directory": "packages/ui"
   },
   "scripts": {
-    "lint": "eslint .",
     "test": "vitest run"
   },
   "peerDependencies": {

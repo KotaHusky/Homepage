@@ -28,5 +28,5 @@
     "next-env.d.ts"
   ],
   "exclude": ["node_modules", "tmp", "infra"],
-  "extends": "./tsconfig.base.json"
+  "extends": "../../tsconfig.base.json"
 }

@@ -1,30 +1,44 @@
-import { AmbientOverlay } from "./components/ambient-overlay";
-import { HomepageButton } from "./components/homepage-button";
-import { SocialIcon } from "./components/social-icon";
-import { ProfileCarousel } from "./components/profile-carousel";
-import { IconTooltip } from "./components/icon-tooltip";
-import { TelegramModal } from "./components/telegram-modal";
-import { QrModal } from "./components/qr-modal";
-import {MapPinIcon} from '@heroicons/react/20/solid'
-import { SiApplemusic, SiLetterboxd } from 'react-icons/si'
-import packageJson from '../package.json'
+import {
+  AmbientOverlay,
+  HomepageButton,
+  SocialIcon,
+  ProfileCarousel,
+  IconTooltip,
+  TelegramModal,
+  QrModal,
+} from '@kotahusky/ui';
+import { MapPinIcon } from '@heroicons/react/20/solid';
+import { SiApplemusic, SiLetterboxd } from 'react-icons/si';
+import packageJson from '../package.json';
+// App-specific carousel art.
+import kotaImg from '../public/images/kota.webp';
+import kota2Img from '../public/images/kota2.webp';
+import meImg from '../public/images/me.webp';
 
 export default async function Index() {
-  /*
-   * Note: The corresponding styles are in the ./index.css file.
-   */
   return (
     <div className="relative flex flex-col min-h-screen pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <div className="fixed inset-0 -z-10 bg-vertical md:bg-horizontal" aria-hidden="true" />
-      <AmbientOverlay />
+      <AmbientOverlay
+        colors={['#00B4FF', '#0EA5E9', '#2979FF', '#1E40AF', '#1E3A8A', '#3B5BDB', '#5C1080']}
+        bgColor="#0A1020"
+        animDuration={10}
+        opacity={0.3}
+      />
       <QrModal />
       <div className="relative z-[2] flex flex-col flex-1 items-center mx-6 sm:mx-12 md:mx-24 text-center [text-shadow:_0_1px_4px_rgb(0_0_0_/_0.55)]">
-        <ProfileCarousel />
+        <ProfileCarousel
+          images={[
+            { src: kotaImg, alt: 'Kota Husky profile photo' },
+            { src: kota2Img, alt: 'Kota Husky profile photo 2' },
+            { src: meImg, alt: 'Kota Husky profile photo 3' },
+          ]}
+        />
         {/* Identity group: name hugs location */}
         <h1 className="text-3xl font-bold mb-1">Kota Husky</h1>
         <div className="mb-10 flex items-center text-sm text-white/90">
           <MapPinIcon className="mr-1.5 h-4 w-4 flex-shrink-0 text-white/80" aria-hidden="true" />
-          <a href="https://maps.app.goo.gl/bnaBxUkmbfWcP6UX8" target="_blank" rel="noreferrer" className="mr-4 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Southern New Hampshire, USA — view on map">Southern New Hampshire, USA</a>
+          <a href="https://maps.app.goo.gl/bnaBxUkmbfWcP6UX8" target="_blank" rel="noreferrer" className="mr-4 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Southern New Hampshire, USA — view on map">Southern New Hampshire, USA</a>
         </div>
         {/* What I do group: tight cluster of role lines, clear gap before actions */}
         <div className="mb-10 max-w-md space-y-1.5">
@@ -49,7 +63,23 @@ export default async function Index() {
               <SocialIcon icon={"fa-brands fa-bluesky"} href={"https://bsky.app/profile/kota.dog"} label="Bluesky" />
             </IconTooltip>
             <IconTooltip label="Telegram">
-              <TelegramModal />
+              <TelegramModal telegramUrl="https://t.me/KotaHusky">
+                <p>
+                  For all <strong className="text-white">Barks & Rec</strong> inquiries, please reach out at{' '}
+                  <a href="mailto:hello@bandr.org" className="text-brand-400 hover:text-brand-300 underline underline-offset-2">
+                    hello@bandr.org
+                  </a>
+                </p>
+                <p>
+                  I only respond to <strong className="text-white">thoughtful messages</strong> &mdash; tell me who you are and what you&rsquo;re reaching out about so I can respond in kind.
+                </p>
+                <p className="text-gray-400 text-sm">
+                  I don&rsquo;t do casual chats except with friends &mdash; expect async replies.
+                </p>
+                <p className="text-orange-400 text-sm font-medium">
+                  Simple pleasantries (&ldquo;hi&rdquo;, &ldquo;hello&rdquo;) will be ignored, deleted, and likely blocked.
+                </p>
+              </TelegramModal>
             </IconTooltip>
             <IconTooltip label="GitHub">
               <SocialIcon icon={"fa-brands fa-github"} href={"https://github.com/KotaHusky"} label="GitHub" />
@@ -58,12 +88,12 @@ export default async function Index() {
               <SocialIcon icon={"fa-brands fa-python"} href={"https://pypi.org/user/KotaHusky/"} label="Python on PyPI" />
             </IconTooltip>
             <IconTooltip label="Letterboxd">
-              <a href="https://letterboxd.com/KotaHusky/" target="_blank" rel="noreferrer" className="rounded-sm transition-colors duration-200 ease-in-out hover:text-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Letterboxd">
+              <a href="https://letterboxd.com/KotaHusky/" target="_blank" rel="noreferrer" className="rounded-sm transition-colors duration-200 ease-in-out hover:text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Letterboxd">
                 <SiLetterboxd className="inline-block align-middle -translate-y-[4px]" />
               </a>
             </IconTooltip>
             <IconTooltip label="Apple Music">
-              <a href="https://music.apple.com/profile/KotaHusky" target="_blank" rel="noreferrer" className="rounded-sm transition-colors duration-200 ease-in-out hover:text-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Apple Music">
+              <a href="https://music.apple.com/profile/KotaHusky" target="_blank" rel="noreferrer" className="rounded-sm transition-colors duration-200 ease-in-out hover:text-brand-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent" aria-label="Apple Music">
                 <SiApplemusic className="inline-block align-middle -translate-y-[4px]" />
               </a>
             </IconTooltip>
