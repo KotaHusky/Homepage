@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/KotaHusky/Homepage/compare/v2.2.2...v2.3.0) (2026-06-26)
+
+
+### Features
+
+* shared @kotahusky/ui package + monorepo (apps/web) ([#55](https://github.com/KotaHusky/Homepage/issues/55)) ([32a03ad](https://github.com/KotaHusky/Homepage/commit/32a03ad5448e928e8b7b820653ee7c79913e5701))
+
 ## [2.2.2](https://github.com/KotaHusky/Homepage/compare/v2.2.1...v2.2.2) (2026-06-22)
 
 
