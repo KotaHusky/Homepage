@@ -9,7 +9,7 @@ routes = [
 ]
 
 [env.production.vars]
-S3_ORIGIN = "https://homepage-prod.s3.us-east-1.amazonaws.com"
+S3_ORIGIN = "https://kota-homepage-prod.s3.us-east-1.amazonaws.com"
 
 [env.dev]
 routes = [
@@ -17,4 +17,4 @@ routes = [
 ]
 
 [env.dev.vars]
-S3_ORIGIN = "https://homepage-dev.s3.us-east-1.amazonaws.com"
+S3_ORIGIN = "https://kota-homepage-dev.s3.us-east-1.amazonaws.com"
