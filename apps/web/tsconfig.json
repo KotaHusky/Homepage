@@ -27,6 +27,6 @@
     ".next/types/**/*.ts",
     "next-env.d.ts"
   ],
-  "exclude": ["node_modules", "tmp", "infra"],
+  "exclude": ["node_modules", "tmp", "infra", "../../worker"],
   "extends": "../../tsconfig.base.json"
 }
