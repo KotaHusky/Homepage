@@ -1,0 +1,43 @@
+name: Deploy Cloudflare Worker (edge proxy)
+
+# Deploys the edge proxy Worker that fronts the static S3 site.
+# AWS/CDK owns the bucket; Cloudflare owns the edge — this is the Cloudflare half
+# of the deploy. The site content itself ships via the static S3 sync workflow.
+#
+# Required repo secrets:
+#   CLOUDFLARE_API_TOKEN  — scoped to Workers Scripts:Edit + Workers Routes:Edit
+#   CLOUDFLARE_ACCOUNT_ID — the Cloudflare account id
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - '.github/workflows/deploy-cloudflare-worker.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Worker environment to deploy'
+        type: choice
+        options: [dev, production]
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cf-worker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy --env ${{ github.event.inputs.environment || 'production' }}
