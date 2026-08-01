@@ -1,0 +1,20 @@
+name = "homepage-edge"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[env.production]
+routes = [
+  { pattern = "kota.dog/*", zone_name = "kota.dog" },
+  { pattern = "www.kota.dog/*", zone_name = "kota.dog" },
+]
+
+[env.production.vars]
+S3_ORIGIN = "https://homepage-prod.s3.us-east-1.amazonaws.com"
+
+[env.dev]
+routes = [
+  { pattern = "dev.kota.dog/*", zone_name = "kota.dog" },
+]
+
+[env.dev.vars]
+S3_ORIGIN = "https://homepage-dev.s3.us-east-1.amazonaws.com"
