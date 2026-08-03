@@ -44,6 +44,7 @@ Thumbs.db
 
 # Next.js
 .next
+apps/web/out
 
 # Claude Code — keep agents, ignore everything else
 .claude/*

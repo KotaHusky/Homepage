@@ -1,18 +1,20 @@
-name: Deploy (AWS / ECS Express)
+name: Deploy static site (S3)
 
-# Thin caller — all orchestration lives in cicd-toolkit's reusable
-# ecs-express-app-deploy workflow.
-#   push to main             -> prod (kota.dog, min-tasks 1)
-#   PR labeled `deploy:dev`  -> dev  (dev.kota.dog, min-tasks 0, scale-to-zero)
+# Builds the Next.js static export and syncs it to the S3 bucket in Kota Web.
+# Cloudflare fronts the bucket (edge routing + cache) — that half ships via
+# deploy-cloudflare-worker.yml. There is no CloudFront and no ECS here.
+#
+#   push to main             -> prod bucket (homepage-prod)
+#   PR labeled `deploy:dev`  -> dev bucket  (homepage-dev)
 #   workflow_dispatch        -> manual dev/prod
 #
-# Repo vars: AWS_ACCOUNT_ID, ACM_CERT_ARN_PROD, ACM_CERT_ARN_DEV.
-# Secrets: AWS_DEPLOY_ROLE_ARN, ECS_EXECUTION_ROLE_ARN, ECS_INFRASTRUCTURE_ROLE_ARN.
+# Repo var:    AWS_ACCOUNT_ID
+# Repo secrets: AWS_DEPLOY_ROLE_ARN (OIDC, main-ref only), PACKAGES_READ_TOKEN
 
 on:
   push:
     branches: [main]
-    paths-ignore: ['*.md', 'LICENSE', 'docs/**']
+    paths-ignore: ['worker/**', '**.md', 'LICENSE', 'docs/**']
   pull_request:
     types: [labeled, synchronize, reopened]
   workflow_dispatch:
@@ -25,28 +27,67 @@ on:
 
 permissions:
   contents: read
-  packages: write
   id-token: write
 
-# Cancel superseded runs on the same ref (rapid pushes to a PR/main).
 concurrency:
-  group: deploy-aws-${{ github.ref }}
+  group: deploy-static-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   deploy:
-    uses: KotaHusky/cicd-toolkit/.github/workflows/ecs-express-app-deploy.yml@main
-    with:
-      app: homepage
-      stack-prefix: HomepageEdge
-      prod-domain: kota.dog
-      dev-domain: dev.kota.dog
-      prod-cert-arn: ${{ vars.ACM_CERT_ARN_PROD }}
-      dev-cert-arn: ${{ vars.ACM_CERT_ARN_DEV }}
-      aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
-      environment: ${{ github.event.inputs.environment }}
-      prod-additional-aliases: www.kota.dog
-    secrets:
-      role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-      execution-role-arn: ${{ secrets.ECS_EXECUTION_ROLE_ARN }}
-      infrastructure-role-arn: ${{ secrets.ECS_INFRASTRUCTURE_ROLE_ARN }}
+    if: >-
+      github.event_name != 'pull_request' ||
+      contains(github.event.pull_request.labels.*.name, 'deploy:dev')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Resolve environment + bucket
+        id: cfg
+        shell: bash
+        run: |
+          case "${{ github.event_name }}" in
+            push)         ENV=prod ;;
+            pull_request) ENV=dev ;;
+            *)            ENV="${{ inputs.environment || 'dev' }}" ;;
+          esac
+          BUCKET=$([ "$ENV" = "prod" ] && echo homepage-prod || echo homepage-dev)
+          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
+          echo "Deploying $ENV -> s3://$BUCKET"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@kotahusky'
+
+      - name: Install dependencies
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+        run: npm ci
+
+      - name: Build static export
+        run: npm run build
+
+      - uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Sync to S3
+        shell: bash
+        env:
+          BUCKET: ${{ steps.cfg.outputs.bucket }}
+        run: |
+          # HTML + RSC payloads: short cache; Cloudflare revalidates quickly.
+          aws s3 sync apps/web/out/ "s3://${BUCKET}/" --delete \
+            --cache-control "public, max-age=60, must-revalidate"
+          # Fingerprinted, immutable assets: long cache.
+          if [ -d apps/web/out/_next/static ]; then
+            aws s3 cp apps/web/out/_next/static "s3://${BUCKET}/_next/static" --recursive \
+              --cache-control "public, max-age=31536000, immutable"
+          fi
+          echo "Synced $(find apps/web/out -type f | wc -l | tr -d ' ') files to s3://${BUCKET}"
