@@ -20,14 +20,13 @@ Personal homepage built with modern web technologies and cloud-native DevOps pra
 
 ## DevOps & Infrastructure
 
-This project demonstrates a production-grade CI/CD pipeline and a containerized AWS deployment:
+This project demonstrates a production-grade CI/CD pipeline and a fully static, serverless AWS + Cloudflare deployment:
 
-- **Containerization:** Multi-stage Docker build producing a minimal Node.js Alpine image
+- **Static export:** Next.js `output: 'export'` produces a fully static `apps/web/out/` bundle — no server runtime, no always-on compute
 - **CI/CD:** GitHub Actions pipelines leveraging reusable workflows from a shared [cicd-toolkit](https://github.com/KotaHusky/cicd-toolkit)
-- **Registry:** Docker images published to GitHub Container Registry (GHCR), mirrored to Amazon ECR
-- **Hosting:** AWS **ECS Express** (Fargate) service behind a shared ALB gateway, fronted by **CloudFront** (edge + ACM/TLS), in `us-east-1`
-- **DNS:** Cloudflare (DNS-only) — `kota.dog` → CloudFront distribution
-- **Edge infra:** AWS CDK (`infra/`) deploys the CloudFront edge stack; see [`infra/README.aws.md`](infra/README.aws.md)
+- **Hosting:** Static assets synced to Amazon **S3** (`kota-homepage-prod` / `-dev`, `us-east-1`), locked to Cloudflare origin IPs
+- **Edge:** A **Cloudflare Worker** (`worker/`) fronts the bucket — apex redirect (`www` → apex), S3 proxy with index resolution, and edge caching. No CloudFront, ECS, or Fargate.
+- **DNS:** Cloudflare (proxied) — `kota.dog` and `dev.kota.dog`
 - **Releases:** Automated semantic versioning and changelogs via semantic-release and conventional commits (enforced with commitlint)
 
 ## Local Development
