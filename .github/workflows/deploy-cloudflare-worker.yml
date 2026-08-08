@@ -1,7 +1,7 @@
 name: Deploy Cloudflare Worker (edge proxy)
 
 # Deploys the edge proxy Worker that fronts the static S3 site.
-# AWS/CDK owns the bucket; Cloudflare owns the edge — this is the Cloudflare half
+# AWS owns the bucket (S3); Cloudflare owns the edge — this is the Cloudflare half
 # of the deploy. The site content itself ships via the static S3 sync workflow.
 #
 # Required repo secrets:

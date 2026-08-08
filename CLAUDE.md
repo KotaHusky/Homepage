@@ -60,7 +60,7 @@
 - **Node**: Requires >= 24 (use `nvm use 24`)
 
 ### Deployment
-- Hosted on AWS **ECS Express** (Fargate) + **CloudFront** in `us-east-1`; DNS on Cloudflare (DNS-only) → `kota.dog`. Edge infra is AWS CDK in `infra/` (see `infra/README.aws.md`). Push to `main` runs release + deploy via `.github/workflows/`.
+- Static Next.js export (`output: 'export'`) synced to Amazon **S3** (`kota-homepage-prod` / `-dev`, `us-east-1`, Kota Web account `205899621981`), fronted by a **Cloudflare Worker** (`worker/`) — apex redirect + S3 proxy + edge cache. No CloudFront/ECS/Fargate. DNS on Cloudflare (proxied) → `kota.dog`. Push to `main` runs release + deploy via `.github/workflows/` (`deploy-aws.yml` = S3 sync, `deploy-cloudflare-worker.yml` = Worker).
 
 ### Commands
 - `npm run dev` — Dev server (Turbopack, hot reload)
