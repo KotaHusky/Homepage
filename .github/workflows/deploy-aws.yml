@@ -4,8 +4,8 @@ name: Deploy static site (S3)
 # Cloudflare fronts the bucket (edge routing + cache) — that half ships via
 # deploy-cloudflare-worker.yml. There is no CloudFront and no ECS here.
 #
-#   push to main             -> prod bucket (homepage-prod)
-#   PR labeled `deploy:dev`  -> dev bucket  (homepage-dev)
+#   push to main             -> prod bucket (kota-homepage-prod)
+#   PR labeled `deploy:dev`  -> dev bucket  (kota-homepage-dev)
 #   workflow_dispatch        -> manual dev/prod
 #
 # Repo var:    AWS_ACCOUNT_ID
@@ -52,7 +52,7 @@ jobs:
             pull_request) ENV=dev ;;
             *)            ENV="${{ inputs.environment || 'dev' }}" ;;
           esac
-          BUCKET=$([ "$ENV" = "prod" ] && echo homepage-prod || echo homepage-dev)
+          BUCKET=$([ "$ENV" = "prod" ] && echo kota-homepage-prod || echo kota-homepage-dev)
           echo "env=$ENV" >> "$GITHUB_OUTPUT"
           echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
           echo "Deploying $ENV -> s3://$BUCKET"
