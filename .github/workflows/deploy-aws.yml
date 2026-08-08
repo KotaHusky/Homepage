@@ -91,3 +91,13 @@ jobs:
               --cache-control "public, max-age=31536000, immutable"
           fi
           echo "Synced $(find apps/web/out -type f | wc -l | tr -d ' ') files to s3://${BUCKET}"
+
+      - name: Tag S3 bucket
+        shell: bash
+        env:
+          BUCKET: ${{ steps.cfg.outputs.bucket }}
+          ENV: ${{ steps.cfg.outputs.env }}
+          REPO: ${{ github.repository }}
+        run: |
+          aws s3api put-bucket-tagging --bucket "$BUCKET" \
+            --tagging "TagSet=[{Key=Project,Value=homepage},{Key=Environment,Value=$ENV},{Key=Repository,Value=$REPO}]"
